@@ -216,7 +216,14 @@ class OpenApi extends Plugin
 
                     protected function getAuthValue($name)
                     {
-                        return $this->auth[$name] ?? null;
+                        switch ($this->auth['provider']) {
+                            case 'user':
+                                return $this->getCredential($name);
+                            case 'system':
+                                return $this->auth[$name] ?? null;
+                            default:
+                                return null;
+                        }
                     }
 
                     protected function run(Args $args)
