@@ -31,7 +31,7 @@ class OpenApi extends Plugin
         } catch (Throwable) {
 
         }
-        if ($this->auth) {
+        if ($auth) {
             $this->auth = $auth;
         }
     }
