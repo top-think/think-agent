@@ -5,7 +5,9 @@ namespace think\agent;
 use cebe\openapi\Reader;
 use cebe\openapi\spec\Operation;
 use GuzzleHttp\Client;
+use ReflectionClass;
 use think\agent\tool\Args;
+use think\agent\tool\FunctionCall;
 use think\agent\tool\result\Plain;
 use think\ai\Exception;
 use think\facade\View;
@@ -16,13 +18,36 @@ class OpenApi extends Plugin
     /** @var \cebe\openapi\spec\OpenApi */
     protected $openApi;
 
-    public function __construct($schema, protected $auth = null)
+    protected $auth;
+
+    public function __construct($schema = null, $auth = null)
     {
         try {
-            $this->openApi = Reader::readFromYaml($schema);
+            if ($schema) {
+                $this->openApi = Reader::readFromYaml($schema);
+            } else {
+                $this->openApi = $this->readFromYamlFile();
+            }
         } catch (Throwable) {
 
         }
+
+        $this->auth = $auth;
+    }
+
+    public function readFromYamlFile()
+    {
+        $c = new ReflectionClass($this);
+
+        $filename = $c->getFileName();
+
+        $schemaFile = dirname($filename) . '/openapi.yaml';
+
+        if (!file_exists($schemaFile)) {
+            return null;
+        }
+
+        return Reader::readFromYamlFile($schemaFile);
     }
 
     public function getCredentials()
@@ -88,7 +113,7 @@ class OpenApi extends Plugin
                     continue;
                 }
 
-                $tools[] = new class($this->openApi, $path, $method, $operation, $this->auth) extends Tool {
+                $tools[] = new class($this->openApi, $path, $method, $operation, $this->auth) extends FunctionCall {
 
                     public function __construct(
                         protected \cebe\openapi\spec\OpenApi $openApi,
