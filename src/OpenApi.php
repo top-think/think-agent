@@ -31,8 +31,9 @@ class OpenApi extends Plugin
         } catch (Throwable) {
 
         }
-
-        $this->auth = $auth;
+        if ($this->auth) {
+            $this->auth = $auth;
+        }
     }
 
     public function readFromYamlFile()
