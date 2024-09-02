@@ -137,6 +137,11 @@ abstract class FunctionCall implements JsonSerializable
         return $this->description;
     }
 
+    public function getFee()
+    {
+        return -1;
+    }
+
     public function getParameters()
     {
         return $this->parameters;
@@ -149,6 +154,7 @@ abstract class FunctionCall implements JsonSerializable
             'title'       => $this->getTitle(),
             'description' => $this->getDescription(),
             'parameters'  => $this->getParameters(),
+            'fee'         => $this->getFee(),
         ];
     }
 }
