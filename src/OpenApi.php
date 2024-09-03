@@ -54,7 +54,7 @@ class OpenApi extends Plugin
     public function getCredentials()
     {
         try {
-            if ($this->auth && $this->auth['provider'] == 'user') {
+            if (!empty($this->auth['provider']) && $this->auth['provider'] == 'user') {
                 switch ($this->auth['type']) {
                     case 'http':
                         switch ($this->auth['scheme']) {
@@ -216,7 +216,7 @@ class OpenApi extends Plugin
 
                     protected function getAuthValue($name)
                     {
-                        switch ($this->auth['provider']) {
+                        switch ($this->auth['provider'] ?? 'system') {
                             case 'user':
                                 return $this->getCredential($name);
                             case 'system':
@@ -235,7 +235,7 @@ class OpenApi extends Plugin
                         $headers    = [];
 
                         if (!empty($this->auth)) {
-                            switch ($this->auth['type']) {
+                            switch ($this->auth['type'] ?? null) {
                                 case 'http':
                                     switch ($this->auth['scheme']) {
                                         case 'bearer':
