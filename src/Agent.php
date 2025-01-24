@@ -298,19 +298,9 @@ abstract class Agent
 
                 switch ($type) {
                     case 'plugin':
-                        $content = $call['plugin']['content'];
-                        if (!empty($content) && is_array($content)) {
-                            switch ($content['type']) {
-                                case 'image':
-                                    //图片本地化
-                                    $content['image'] = $this->saveImage($content['image']);
-                                    break;
-                            }
-                        }
-
                         $result = new Raw([
                             'response' => $call['plugin']['response'],
-                            'content'  => $content,
+                            'content'  => $call['plugin']['content'],
                             'error'    => $call['plugin']['error'],
                             'usage'    => $call['plugin']['usage'],
                         ]);
@@ -348,11 +338,21 @@ abstract class Agent
                     //调用工具产生的计费
                     $this->usage += $result->getUsage();
 
+                    $content = $result->getContent();
+                    if (!empty($content) && is_array($content)) {
+                        switch ($content['type']) {
+                            case 'image':
+                                //图片本地化
+                                $content['image'] = $this->saveImage($content['image']);
+                                break;
+                        }
+                    }
+
                     //下发调用工具完成的状态
                     yield from $this->sendToolData($chunkIndex, $index, [
                         'response' => $result->getResponse(),
                         'error'    => $result->isError(),
-                        'content'  => $result->getContent(),
+                        'content'  => $content,
                     ]);
                 }
             }
