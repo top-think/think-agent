@@ -271,6 +271,10 @@ abstract class Agent
                         $calls[$callIndex] = Arr::mergeDeep($calls[$callIndex], $call);
                     }
                 } else {
+                    $reasoning = $event['delta']['reasoning'] ?? '';
+                    if ($reasoning !== '') {//这里必须和''强比较，防止0等字符不能输出
+                        yield from $this->sendChunkData($chunkIndex, 'reasoning', $reasoning, true);
+                    }
                     $content = $event['delta']['content'] ?? '';
                     if ($content !== '') {//这里必须和''强比较，防止0等字符不能输出
                         yield from $this->sendChunkData($chunkIndex, 'content', $content, true);
