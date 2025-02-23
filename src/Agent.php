@@ -196,7 +196,14 @@ abstract class Agent
             ];
 
             if (!empty($this->chunks)) {
-                $this->saveMessage($usage, $latency);
+                $id = $this->saveMessage($usage, $latency);
+
+                //更新消息ID
+                if (!empty($id)) {
+                    yield [
+                        'id' => $id,
+                    ];
+                }
             }
 
             $this->round     = 0;
