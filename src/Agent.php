@@ -164,12 +164,6 @@ abstract class Agent
 
     abstract protected function init($params);
 
-    public function chat($params = [])
-    {
-        $this->init($params);
-        return $this->run();
-    }
-
     protected function start()
     {
         $messages = $this->buildPromptMessages();
@@ -177,9 +171,10 @@ abstract class Agent
         yield from $this->iteration($messages, $tools);
     }
 
-    protected function run()
+    public function run($params)
     {
         try {
+            $this->init($params);
             $start = microtime(true);
             yield from $this->start();
         } finally {
