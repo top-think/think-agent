@@ -177,6 +177,8 @@ abstract class Agent
         try {
             $start = microtime(true);
             yield from $this->start();
+        } catch (Throwable $e) {
+            yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
         } finally {
             $latency = round((microtime(true) - $start) * 1000);
 
