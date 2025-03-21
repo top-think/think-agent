@@ -173,9 +173,9 @@ abstract class Agent
 
     public function run($params)
     {
-        $start = microtime(true);
+        $this->init($params);
         try {
-            $this->init($params);
+            $start = microtime(true);
             yield from $this->start();
         } finally {
             $latency = round((microtime(true) - $start) * 1000);
