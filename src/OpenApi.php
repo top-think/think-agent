@@ -168,6 +168,9 @@ class OpenApi extends Plugin
                             if (!empty($parameter->schema->enum)) {
                                 $param['enum'] = $parameter->schema->enum;
                             }
+                            if (!empty($parameter->schema->enumNames)) {
+                                $param['enumNames'] = $parameter->schema->enumNames;
+                            }
 
                             $parameters[$parameter->name] = $param;
                         }
