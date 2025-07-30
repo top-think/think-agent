@@ -220,8 +220,8 @@ abstract class Agent
         $chunkIndex = $this->round;
 
         $model       = Arr::get($this->config['model'], 'name');
+        $thinking    = Arr::get($this->config['model'], 'thinking', 'enabled');
         $temperature = Arr::get($this->config['model'], 'params.temperature', 0.8);
-        $thinking    = Arr::get($this->config['model'], 'params.thinking', 'enabled');
 
         $params = [
             'model'       => $model,
