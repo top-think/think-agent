@@ -196,6 +196,9 @@ class OpenApi extends Plugin
                                         if (!empty($property->enum)) {
                                             $param['enum'] = $property->enum;
                                         }
+                                        if (!empty($property->enumNames)) {
+                                            $param['enumNames'] = $property->enumNames;
+                                        }
                                         $parameters[$name] = $param;
                                     }
                                     break;
