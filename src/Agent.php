@@ -145,7 +145,7 @@ abstract class Agent
                 } else {
                     $chunkMessages[] = [
                         'role'    => 'assistant',
-                        'content' => $chunk['content'],
+                        'content' => $chunk['content'] ?? '',
                     ];
                 }
             }
@@ -218,14 +218,15 @@ abstract class Agent
     protected function iteration($messages, $tools)
     {
         $chunkIndex = $this->round;
-        $this->round++;
 
         $model       = Arr::get($this->config['model'], 'name');
         $temperature = Arr::get($this->config['model'], 'params.temperature', 0.8);
+        $thinking    = Arr::get($this->config['model'], 'params.thinking', 'enabled');
 
         $params = [
             'model'       => $model,
             'messages'    => $messages,
+            'thinking'    => $thinking,
             'temperature' => $temperature,
         ];
 
@@ -237,6 +238,7 @@ abstract class Agent
 
         try {
             $result = $this->getClient()->chat()->completions($params);
+            $this->round++;
 
             foreach ($result as $event) {
                 if (!empty($event['delta']['tool_calls'])) {
