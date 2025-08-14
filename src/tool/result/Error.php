@@ -7,13 +7,18 @@ use Throwable;
 
 class Error extends Result
 {
-    public function __construct(protected Throwable $exception)
+    protected $message = 'Unknown error';
+
+    public function __construct(Throwable|string $exception)
     {
-        $this->error = true;
+        $message = $exception instanceof Throwable ? $exception->getMessage() : $exception;
+
+        $this->message = $message;
+        $this->error   = true;
     }
 
     public function getResponse()
     {
-        return 'error: ' . $this->exception->getMessage();
+        return 'error: ' . $this->message;
     }
 }
