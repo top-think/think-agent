@@ -222,12 +222,14 @@ abstract class Agent
         $model       = Arr::get($this->config['model'], 'name');
         $thinking    = Arr::get($this->config['model'], 'thinking', 'enabled');
         $temperature = Arr::get($this->config['model'], 'params.temperature', 0.8);
+        $user        = $this->config['user'] ?? null;
 
         $params = [
             'model'       => $model,
             'messages'    => $messages,
             'thinking'    => $thinking,
             'temperature' => $temperature,
+            'user'        => $user,
         ];
 
         if (!empty($tools)) {
