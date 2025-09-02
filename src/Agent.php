@@ -21,6 +21,7 @@ abstract class Agent
     protected $plugins   = [];
 
     protected $canUseTool = false;
+    protected $iterable   = true;
 
     protected function addFunction($key, FunctionCall $func, $args = [])
     {
@@ -175,34 +176,14 @@ abstract class Agent
     {
         $this->init($params);
         try {
-            $start = microtime(true);
             yield from $this->start();
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
         } finally {
-            $latency = round((microtime(true) - $start) * 1000);
-
-            $usage = $this->consumeTokens($this->usage);
-
-            //更新统计
-            yield [
-                'stats' => [
-                    'usage'   => $usage,
-                    'latency' => $latency,
-                ],
-            ];
-
-            if (!empty($this->chunks)) {
-                $id = $this->saveMessage($usage, $latency);
-
-                //更新消息ID
-                if (!empty($id)) {
-                    yield [
-                        'id' => $id,
-                    ];
-                }
+            try {
+                $this->complete();
+            } catch (Throwable) {
             }
-
             $this->round     = 0;
             $this->usage     = 0;
             $this->chunks    = [];
@@ -211,9 +192,7 @@ abstract class Agent
         }
     }
 
-    abstract protected function saveMessage($usage, $latency);
-
-    abstract protected function consumeTokens(int $usage): int;
+    abstract protected function complete();
 
     protected function iteration($messages, $tools)
     {
@@ -369,7 +348,9 @@ abstract class Agent
                 }
             }
 
-            yield from $this->iteration($messages, $tools);
+            if ($this->iterable) {
+                yield from $this->iteration($messages, $tools);
+            }
         }
     }
 
@@ -382,29 +363,33 @@ abstract class Agent
 
     protected function sendToolData($chunkIndex, $toolIndex, $data)
     {
-        $this->updateChunk($chunkIndex, "tools.{$toolIndex}", $data);
+        if ($this->iterable) {
+            $this->updateChunk($chunkIndex, "tools.{$toolIndex}", $data);
 
-        yield [
-            'chunks' => [
-                'index' => $chunkIndex,
-                'tools' => [
-                    'index' => $toolIndex,
-                    ...$data,
+            yield [
+                'chunks' => [
+                    'index' => $chunkIndex,
+                    'tools' => [
+                        'index' => $toolIndex,
+                        ...$data,
+                    ],
                 ],
-            ],
-        ];
+            ];
+        }
     }
 
     protected function sendChunkData($chunkIndex, $key, $value, $append = false)
     {
-        $this->updateChunk($chunkIndex, $key, $value, $append);
+        if ($this->iterable) {
+            $this->updateChunk($chunkIndex, $key, $value, $append);
 
-        yield [
-            'chunks' => [
-                'index' => $chunkIndex,
-                $key    => $value,
-            ],
-        ];
+            yield [
+                'chunks' => [
+                    'index' => $chunkIndex,
+                    $key    => $value,
+                ],
+            ];
+        }
     }
 
     protected function updateChunk($chunkIndex, $key, $value, $append = false)
