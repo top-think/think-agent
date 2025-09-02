@@ -19,6 +19,7 @@ abstract class Agent
     protected $chunks    = [];
     protected $functions = [];
     protected $plugins   = [];
+    protected $tools     = [];
 
     protected $canUseTool = false;
     protected $iterable   = true;
@@ -167,9 +168,9 @@ abstract class Agent
 
     protected function start()
     {
-        $messages = $this->buildPromptMessages();
-        $tools    = $this->buildTools();
-        yield from $this->iteration($messages, $tools);
+        $this->tools = $this->buildTools();
+        $messages    = $this->buildPromptMessages();
+        yield from $this->iteration($messages);
     }
 
     public function run($params)
@@ -180,10 +181,11 @@ abstract class Agent
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
         } finally {
-            try {
-                $this->complete();
-            } catch (Throwable) {
+            if ($this->iterable) {
+                $this->saveChunks();
             }
+            $this->complete();
+
             $this->round     = 0;
             $this->usage     = 0;
             $this->chunks    = [];
@@ -192,12 +194,16 @@ abstract class Agent
         }
     }
 
+    public function stop()
+    {
+        $this->iterable = false;
+        $this->saveChunks();
+    }
+
     abstract protected function complete();
 
-    protected function iteration($messages, $tools)
+    protected function iteration($messages)
     {
-        $chunkIndex = $this->round;
-
         $model       = Arr::get($this->config['model'], 'name');
         $thinking    = Arr::get($this->config['model'], 'thinking', 'enabled');
         $temperature = Arr::get($this->config['model'], 'params.temperature', 0.8);
@@ -211,11 +217,12 @@ abstract class Agent
             'user'        => $user,
         ];
 
-        if (!empty($tools)) {
-            $params['tools'] = $tools;
+        if (!empty($this->tools)) {
+            $params['tools'] = $this->tools;
         }
 
-        $calls = [];
+        $chunkIndex = $this->round;
+        $calls      = [];
 
         try {
             $result = $this->getClient()->chat()->completions($params);
@@ -349,12 +356,15 @@ abstract class Agent
             }
 
             if ($this->iterable) {
-                yield from $this->iteration($messages, $tools);
+                $this->saveChunks();
+                yield from $this->iteration($messages);
             }
         }
     }
 
     abstract protected function getClient(): Client;
+
+    abstract protected function saveChunks();
 
     protected function saveImage($image)
     {
