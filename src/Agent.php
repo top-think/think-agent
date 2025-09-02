@@ -174,8 +174,8 @@ abstract class Agent
 
     public function run($params)
     {
-        $this->init($params);
         try {
+            $this->init($params);
             yield from $this->start();
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
