@@ -14,12 +14,13 @@ abstract class Agent
 {
     protected $config = [];
 
-    protected $usage     = 0;
-    protected $round     = 0;
-    protected $chunks    = [];
-    protected $functions = [];
-    protected $plugins   = [];
-    protected $tools     = [];
+    protected $usage      = 0;
+    protected $round      = 0;
+    protected $chunks     = [];
+    protected $functions  = [];
+    protected $plugins    = [];
+    protected $mcpServers = [];
+    protected $tools      = [];
 
     protected $canUseTool = false;
     protected $iterable   = true;
@@ -40,6 +41,17 @@ abstract class Agent
             return [null, []];
         }
         return $this->functions[$key];
+    }
+
+    protected function addMcpServer($name, $url, $options = [])
+    {
+        $this->mcpServers[] = [
+            'name' => $name,
+            'url'  => $url,
+            ...$options,
+        ];
+
+        return $this;
     }
 
     protected function addPlugin($name, $tool, $args = [])
@@ -64,6 +76,13 @@ abstract class Agent
             $tools[] = [
                 'type'   => 'plugin',
                 'plugin' => $plugin,
+            ];
+        }
+
+        foreach ($this->mcpServers as $server) {
+            $tools[] = [
+                'type' => 'mcp',
+                'mcp'  => $server,
             ];
         }
 
@@ -247,6 +266,14 @@ abstract class Agent
                                     'arguments' => $call['plugin']['arguments'],
                                 ]);
                                 break;
+                            case 'mcp':
+                                yield from $this->sendToolData($chunkIndex, $callIndex, [
+                                    'id'        => $call['id'],
+                                    'name'      => $call['mcp']['function'],
+                                    'title'     => $call['mcp']['title'],
+                                    'arguments' => $call['mcp']['arguments'],
+                                ]);
+                                break;
                             case 'function':
                                 $name = $call['function']['name'];
                                 [$function] = $this->getFunction($name);
@@ -301,6 +328,14 @@ abstract class Agent
                             'content'  => $call['plugin']['content'],
                             'error'    => $call['plugin']['error'],
                             'usage'    => $call['plugin']['usage'],
+                        ]);
+                        break;
+                    case 'mcp':
+                        $result = new Raw([
+                            'response' => $call['mcp']['response'],
+                            'content'  => $call['mcp']['content'],
+                            'error'    => $call['mcp']['error'],
+                            'usage'    => $call['mcp']['usage'],
                         ]);
                         break;
                     case 'function':
