@@ -22,8 +22,9 @@ abstract class Agent
     protected $mcpServers = [];
     protected $tools      = [];
 
-    protected $canUseTool = false;
-    protected $iterable   = true;
+    protected $canUseTool      = false;
+    protected $iterable        = true;
+    protected $spliceArguments = true;
 
     protected function addFunction($key, FunctionCall $func, $args = [])
     {
@@ -229,11 +230,14 @@ abstract class Agent
         $user        = $this->config['user'] ?? null;
 
         $params = [
-            'model'       => $model,
-            'messages'    => $messages,
-            'thinking'    => $thinking,
-            'temperature' => $temperature,
-            'user'        => $user,
+            'model'          => $model,
+            'messages'       => $messages,
+            'thinking'       => $thinking,
+            'temperature'    => $temperature,
+            'user'           => $user,
+            'stream_options' => [
+                'splice_arguments' => $this->spliceArguments,
+            ],
         ];
 
         if (!empty($this->tools)) {
@@ -255,41 +259,42 @@ abstract class Agent
 
                     if (!isset($calls[$callIndex])) {
                         $calls[$callIndex] = $call;
-
                         //下发调用工具的状态
-                        switch ($call['type']) {
+                        $callType = $call['type'];
+                        switch ($callType) {
                             case 'plugin':
-                                yield from $this->sendToolData($chunkIndex, $callIndex, [
-                                    'id'        => $call['id'],
-                                    'name'      => $call['plugin']['function'],
-                                    'title'     => $call['plugin']['title'],
-                                    'arguments' => $call['plugin']['arguments'],
-                                ]);
-                                break;
                             case 'mcp':
-                                yield from $this->sendToolData($chunkIndex, $callIndex, [
+                                $data = [
                                     'id'        => $call['id'],
-                                    'name'      => $call['mcp']['function'],
-                                    'title'     => $call['mcp']['title'],
-                                    'arguments' => $call['mcp']['arguments'],
-                                ]);
+                                    'name'      => $call[$callType]['function'],
+                                    'title'     => $call[$callType]['title'],
+                                    'arguments' => $call[$callType]['arguments'] ?? '',
+                                ];
+                                yield from $this->sendToolData($chunkIndex, $callIndex, $data);
                                 break;
                             case 'function':
                                 $name = $call['function']['name'];
                                 [$function] = $this->getFunction($name);
                                 if ($function) {
-                                    yield from $this->sendToolData($chunkIndex, $callIndex, [
+                                    $data = [
                                         'id'        => $call['id'],
                                         'name'      => $name,
                                         'title'     => $function->getTitle(),
-                                        'arguments' => $call['function']['arguments'],
-                                    ]);
+                                        'arguments' => $call['function']['arguments'] ?? '',
+                                    ];
+                                    yield from $this->sendToolData($chunkIndex, $callIndex, $data);
                                     $function->prepare();
                                 }
                                 break;
                         }
                     } else {
-                        $calls[$callIndex] = Arr::mergeDeep($calls[$callIndex], $call);
+                        $callType = $calls[$callIndex]['type'];
+                        if (in_array($callType, ['plugin', 'mcp', 'function']) && isset($call[$callType]['arguments'])) {
+                            yield from $this->sendToolArguments($chunkIndex, $callIndex, $call[$callType]['arguments']);
+                            $calls[$callIndex][$callType]['arguments'] .= $call[$callType]['arguments'];
+                        } else {
+                            $calls[$callIndex] = Arr::mergeDeep($calls[$callIndex], $call);
+                        }
                     }
                 } else {
                     $reasoning = $event['delta']['reasoning'] ?? '';
@@ -323,19 +328,12 @@ abstract class Agent
 
                 switch ($type) {
                     case 'plugin':
-                        $result = new Raw([
-                            'response' => $call['plugin']['response'],
-                            'content'  => $call['plugin']['content'],
-                            'error'    => $call['plugin']['error'],
-                            'usage'    => $call['plugin']['usage'],
-                        ]);
-                        break;
                     case 'mcp':
                         $result = new Raw([
-                            'response' => $call['mcp']['response'],
-                            'content'  => $call['mcp']['content'],
-                            'error'    => $call['mcp']['error'],
-                            'usage'    => $call['mcp']['usage'],
+                            'response' => $call[$type]['response'],
+                            'content'  => $call[$type]['content'],
+                            'error'    => $call[$type]['error'],
+                            'usage'    => $call[$type]['usage'],
                         ]);
                         break;
                     case 'function':
@@ -404,6 +402,23 @@ abstract class Agent
     protected function saveImage($image)
     {
         return $image;
+    }
+
+    protected function sendToolArguments($chunkIndex, $toolIndex, $arguments)
+    {
+        if ($this->iterable) {
+            $this->updateChunk($chunkIndex, "tools.{$toolIndex}.arguments", $arguments, true);
+
+            yield [
+                'chunks' => [
+                    'index' => $chunkIndex,
+                    'tools' => [
+                        'index'     => $toolIndex,
+                        'arguments' => $arguments,
+                    ],
+                ],
+            ];
+        }
     }
 
     protected function sendToolData($chunkIndex, $toolIndex, $data)
