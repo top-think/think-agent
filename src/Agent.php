@@ -22,9 +22,10 @@ abstract class Agent
     protected $mcpServers = [];
     protected $tools      = [];
 
-    protected $canUseTool      = false;
-    protected $iterable        = true;
-    protected $spliceArguments = true;
+    protected $canUseTool = false;
+    protected $iterable   = true;
+
+    protected $extraParams = [];
 
     protected function addFunction($key, FunctionCall $func, $args = [])
     {
@@ -230,14 +231,12 @@ abstract class Agent
         $user        = $this->config['user'] ?? null;
 
         $params = [
-            'model'          => $model,
-            'messages'       => $messages,
-            'thinking'       => $thinking,
-            'temperature'    => $temperature,
-            'user'           => $user,
-            'stream_options' => [
-                'splice_arguments' => $this->spliceArguments,
-            ],
+            'model'       => $model,
+            'messages'    => $messages,
+            'thinking'    => $thinking,
+            'temperature' => $temperature,
+            'user'        => $user,
+            ...$this->extraParams,
         ];
 
         if (!empty($this->tools)) {
