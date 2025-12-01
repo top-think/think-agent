@@ -143,17 +143,7 @@ abstract class Agent
                         'role' => 'assistant',
                     ];
 
-                    if (!empty($chunk['content'])) {
-                        $message['content'] = $chunk['content'];
-                    }
-
-                    if (!empty($chunk['reasoning'])) {
-                        $message['reasoning'] = $chunk['reasoning'];
-                    }
-
-                    if (!empty($chunk['signature'])) {
-                        $message['signature'] = $chunk['signature'];
-                    }
+                    $this->updateMessageText($message, $chunk);
 
                     $responses = [];
                     foreach ($chunk['tools'] as $tool) {
@@ -323,10 +313,14 @@ abstract class Agent
         }
 
         if (!empty($calls)) {
-            $messages[] = [
+            $message = [
                 'role'       => 'assistant',
                 'tool_calls' => $calls,
             ];
+
+            $this->updateMessageText($message, $this->chunks[$chunkIndex] ?? []);
+
+            $messages[] = $message;
 
             foreach ($calls as $index => $call) {
                 $id   = $call['id'];
@@ -398,6 +392,21 @@ abstract class Agent
                 $this->saveChunks();
                 yield from $this->iteration($messages);
             }
+        }
+    }
+
+    protected function updateMessageText(&$message, $chunk)
+    {
+        if (isset($chunk['content'])) {
+            $message['content'] = $chunk['content'];
+        }
+
+        if (isset($chunk['reasoning'])) {
+            $message['reasoning'] = $chunk['reasoning'];
+        }
+
+        if (isset($chunk['signature'])) {
+            $message['signature'] = $chunk['signature'];
         }
     }
 
