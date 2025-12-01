@@ -138,10 +138,26 @@ abstract class Agent
                     if (!$this->canUseTool) {
                         break 2;
                     }
-                    $calls     = [];
+
+                    $message = [
+                        'role' => 'assistant',
+                    ];
+
+                    if (!empty($chunk['content'])) {
+                        $message['content'] = $chunk['content'];
+                    }
+
+                    if (!empty($chunk['reasoning'])) {
+                        $message['reasoning'] = $chunk['reasoning'];
+                    }
+
+                    if (!empty($chunk['signature'])) {
+                        $message['signature'] = $chunk['signature'];
+                    }
+
                     $responses = [];
                     foreach ($chunk['tools'] as $tool) {
-                        $calls[] = [
+                        $message['tool_calls'][] = [
                             'id'       => $tool['id'],
                             'type'     => 'function',
                             'function' => [
@@ -158,11 +174,7 @@ abstract class Agent
                         ];
                     }
 
-                    $chunkMessages[] = [
-                        'role'       => 'assistant',
-                        'content'    => $chunk['content'] ?? null,
-                        'tool_calls' => $calls,
-                    ];
+                    $chunkMessages[] = $message;
 
                     $chunkMessages = array_merge($chunkMessages, $responses);
                 } else {
@@ -296,14 +308,9 @@ abstract class Agent
                         }
                     }
                 } else {
-                    $reasoning = $event['delta']['reasoning'] ?? '';
-                    if ($reasoning !== '') {//这里必须和''强比较，防止0等字符不能输出
-                        yield from $this->sendChunkData($chunkIndex, 'reasoning', $reasoning, true);
-                    }
-                    $content = $event['delta']['content'] ?? '';
-                    if ($content !== '') {//这里必须和''强比较，防止0等字符不能输出
-                        yield from $this->sendChunkData($chunkIndex, 'content', $content, true);
-                    }
+                    yield from $this->sendTextChunkData($chunkIndex, 'reasoning');
+                    yield from $this->sendTextChunkData($chunkIndex, 'signature');
+                    yield from $this->sendTextChunkData($chunkIndex, 'content');
                 }
 
                 if (!empty($event['usage'])) {
@@ -391,6 +398,14 @@ abstract class Agent
                 $this->saveChunks();
                 yield from $this->iteration($messages);
             }
+        }
+    }
+
+    protected function sendTextChunkData($chunkIndex, $key)
+    {
+        $text = $event['delta'][$key] ?? '';
+        if ($text !== '') {//这里必须和''强比较，防止0等字符不能输出
+            yield from $this->sendChunkData($chunkIndex, $key, $text, true);
         }
     }
 
