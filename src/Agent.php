@@ -308,9 +308,9 @@ abstract class Agent
                         }
                     }
                 } else {
-                    yield from $this->sendTextChunkData($chunkIndex, 'reasoning');
-                    yield from $this->sendTextChunkData($chunkIndex, 'signature');
-                    yield from $this->sendTextChunkData($chunkIndex, 'content');
+                    yield from $this->sendTextChunkData($chunkIndex, $event, 'reasoning');
+                    yield from $this->sendTextChunkData($chunkIndex, $event, 'signature');
+                    yield from $this->sendTextChunkData($chunkIndex, $event, 'content');
                 }
 
                 if (!empty($event['usage'])) {
@@ -401,7 +401,7 @@ abstract class Agent
         }
     }
 
-    protected function sendTextChunkData($chunkIndex, $key)
+    protected function sendTextChunkData($chunkIndex, $event, $key)
     {
         $text = $event['delta'][$key] ?? '';
         if ($text !== '') {//这里必须和''强比较，防止0等字符不能输出
