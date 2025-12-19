@@ -207,7 +207,7 @@ abstract class Agent
             if ($this->iterable) {
                 $this->saveChunks();
             }
-            $this->complete();
+            yield from $this->complete();
 
             $this->round     = 0;
             $this->usage     = 0;
