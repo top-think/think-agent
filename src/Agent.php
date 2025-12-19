@@ -124,31 +124,23 @@ abstract class Agent
         $historyMessages = [];
 
         foreach ($messages as $message) {
-            $chunkMessages = [
-                [
-                    'role'    => 'user',
-                    'content' => $message->content,
-                ],
-            ];
+
+            $assistantMessages = [];
 
             foreach ($message->chunks as $chunk) {
                 if (!empty($chunk['error'])) {
-                    break 2;
+                    continue;
                 }
                 if (!empty($chunk['tools'])) {
                     if (!$this->canUseTool) {
                         break 2;
                     }
 
-                    $message = [
-                        'role' => 'assistant',
-                    ];
-
-                    $this->updateMessageText($message, $chunk);
-
+                    $calls     = [];
                     $responses = [];
+
                     foreach ($chunk['tools'] as $tool) {
-                        $message['tool_calls'][] = [
+                        $calls[] = [
                             'id'       => $tool['id'],
                             'type'     => 'function',
                             'function' => [
@@ -165,18 +157,38 @@ abstract class Agent
                         ];
                     }
 
-                    $chunkMessages[] = $message;
+                    if (empty($calls)) {
+                        continue;
+                    }
 
-                    $chunkMessages = array_merge($chunkMessages, $responses);
+                    $assistantMessage = [
+                        'role'       => 'assistant',
+                        'tool_calls' => $calls,
+                    ];
+
+                    $this->updateMessageText($assistantMessage, $chunk);
+
+                    $assistantMessages[] = $assistantMessage;
+
+                    $assistantMessages = array_merge($assistantMessages, $responses);
                 } else {
-                    $chunkMessages[] = [
+                    $assistantMessages[] = [
                         'role'    => 'assistant',
-                        'content' => $chunk['content'] ?? '',
+                        'content' => empty($chunk['content']) ? 'None' : $chunk['content'],
                     ];
                 }
             }
 
-            $tempHistoryMessages = array_merge($chunkMessages, $historyMessages);
+            if (empty($assistantMessages)) {
+                continue;
+            }
+
+            $userMessage = [
+                'role'    => 'user',
+                'content' => $message->content,
+            ];
+
+            $tempHistoryMessages = array_merge([$userMessage, ...$assistantMessages], $historyMessages);
             if ($maxTokens > 0) {
                 $tokens = Util::tikToken($tempHistoryMessages);
                 if ($tokens > $maxTokens * .6) {
