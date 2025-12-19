@@ -2,6 +2,7 @@
 
 namespace think\agent;
 
+use Generator;
 use think\agent\tool\FunctionCall;
 use think\agent\tool\result\Error;
 use think\agent\tool\result\Raw;
@@ -207,7 +208,11 @@ abstract class Agent
             if ($this->iterable) {
                 $this->saveChunks();
             }
-            yield from $this->complete();
+
+            $result = $this->complete();
+            if ($result instanceof Generator) {
+                yield from $result;
+            }
 
             $this->round     = 0;
             $this->usage     = 0;
