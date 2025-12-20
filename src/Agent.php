@@ -23,6 +23,8 @@ abstract class Agent
     protected $mcpServers = [];
     protected $tools      = [];
 
+    protected $functionHooks = [];
+
     protected $canUseTool = false;
     protected $iterable   = true;
 
@@ -44,6 +46,11 @@ abstract class Agent
             return [null, []];
         }
         return $this->functions[$key];
+    }
+
+    protected function onFunctionCall($key, callable $func)
+    {
+        $this->functionHooks[$key] = $func;
     }
 
     protected function addMcpServer($name, $url, $options = [])
@@ -369,6 +376,13 @@ abstract class Agent
                             }
 
                             $result = $function(array_merge($arguments, $args));
+
+                            if (isset($this->functionHooks[$name])) {
+                                $hookResult = call_user_func($this->functionHooks[$name], $result);
+                                if ($hookResult instanceof Generator) {
+                                    yield from $hookResult;
+                                }
+                            }
                         } catch (Throwable $e) {
                             $result = new Error($e);
                         }
