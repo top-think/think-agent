@@ -192,7 +192,7 @@ abstract class Agent
 
             $userMessage = [
                 'role'    => 'user',
-                'content' => $message->content,
+                'content' => $this->getMessageContent($message),
             ];
 
             $tempHistoryMessages = array_merge([$userMessage, ...$assistantMessages], $historyMessages);
@@ -424,6 +424,11 @@ abstract class Agent
                 yield from $this->iteration($messages);
             }
         }
+    }
+
+    protected function getMessageContent($message)
+    {
+        return $message->content;
     }
 
     protected function updateMessageText(&$message, $chunk)
