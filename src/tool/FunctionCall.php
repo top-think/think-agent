@@ -67,7 +67,7 @@ abstract class FunctionCall implements JsonSerializable
     public function getLlmDescription()
     {
         $extra       = $this->getExtra();
-        $description = $this->getTitle() . PHP_EOL . $this->getDescription();
+        $description = $this->getDescription();
 
         if (!empty($extra)) {
             $description .= PHP_EOL . $extra;

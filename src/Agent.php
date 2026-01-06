@@ -366,7 +366,7 @@ abstract class Agent
                             [$function, $args] = $this->getFunction($name);
 
                             if (empty($function)) {
-                                throw new Exception("tool [{$name}] not exist");
+                                throw new Exception("tool [{$name}] not exist, please check the tool name.");
                             }
 
                             $arguments = json_decode($call['function']['arguments'], true);
