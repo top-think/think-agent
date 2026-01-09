@@ -15,6 +15,7 @@ abstract class Result
     public function setUsage($usage)
     {
         $this->usage = $usage;
+
         return $this;
     }
 

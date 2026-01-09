@@ -9,17 +9,18 @@ use think\helper\Str;
 
 abstract class Plugin implements JsonSerializable
 {
-    protected $name        = null;
+    protected $name;
     protected $title       = '';
     protected $description = '';
-    protected $icon        = null;
-    protected $credentials = null;
+    protected $icon;
+    protected $credentials;
 
     public function getName()
     {
         if ($this->name) {
             return $this->name;
         }
+
         return Str::snake(class_basename(static::class));
     }
 
@@ -44,8 +45,7 @@ abstract class Plugin implements JsonSerializable
     }
 
     /**
-     * @param $name
-     * @return FunctionCall|null
+     * @return null|FunctionCall
      */
     public function getTool($name)
     {

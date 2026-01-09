@@ -3,11 +3,17 @@
 namespace think\agent;
 
 use Closure;
+use Swoole\Coroutine;
 use think\agent\tiktoken\Encoder;
 
 final class Util
 {
-    protected static ?Encoder $encoder = null;
+    private static ?Encoder $encoder = null;
+
+    public static function inSwooleCoroutine(): bool
+    {
+        return \extension_loaded('swoole') && method_exists(Coroutine::class, 'getCid') && -1 !== Coroutine::getCid();
+    }
 
     public static function toBytes(string $text): array
     {
@@ -23,8 +29,9 @@ final class Util
             // $start
             if (is_array($start)) {
                 $start = array_slice($start, 0, $num);
-                foreach ($start as $key => $value)
+                foreach ($start as $key => $value) {
                     $start[$key] = is_int($value) ? $value : 0;
+                }
             } else {
                 $start = array_pad([$start], $num, $start);
             }
@@ -33,18 +40,23 @@ final class Util
                 $length = array_fill(0, $num, 0);
             } elseif (is_array($length)) {
                 $length = array_slice($length, 0, $num);
-                foreach ($length as $key => $value)
+                foreach ($length as $key => $value) {
                     $length[$key] = isset($value) ? (is_int($value) ? $value : $num) : 0;
+                }
             } else {
                 $length = array_pad([$length], $num, $length);
             }
+
             // Recursive call
             return array_map(__FUNCTION__, $string, $replacement, $start, $length);
         }
         preg_match_all('/./us', (string) $string, $smatches);
         preg_match_all('/./us', (string) $replacement, $rmatches);
-        if ($length === null) $length = mb_strlen($string);
+        if (null === $length) {
+            $length = mb_strlen($string);
+        }
         array_splice($smatches[0], $start, $length, $rmatches[0]);
+
         return join($smatches[0]);
     }
 
@@ -71,7 +83,7 @@ final class Util
         $perMessage = 3;
         $perName    = 1;
 
-        if (self::$encoder === null) {
+        if (null === self::$encoder) {
             self::$encoder = new Encoder();
         }
 
@@ -86,11 +98,11 @@ final class Util
         foreach ($messages as $message) {
             $nums += $perMessage;
             foreach ($message as $key => $value) {
-                if ($key == 'tool_calls') {
+                if ('tool_calls' == $key) {
                     foreach ($value as $call) {
                         foreach ($call as $cKey => $cValue) {
                             $nums += count($encoder->encode($cKey));
-                            if ($cKey == 'function') {
+                            if ('function' == $cKey) {
                                 foreach ($cValue as $fKey => $fValue) {
                                     $nums += count($encoder->encode($fKey));
                                     $nums += count($encoder->encode($fValue));
@@ -111,7 +123,7 @@ final class Util
                                         break;
                                     case 'image_url':
                                         $detail = $v['image_url']['detail'] ?? 'high';
-                                        $nums   += $detail == 'low' ? 85 : 1000;
+                                        $nums += 'low' == $detail ? 85 : 1000;
                                         break;
                                 }
                             }
@@ -123,7 +135,7 @@ final class Util
                     }
                 }
 
-                if ($key == 'name') {
+                if ('name' == $key) {
                     $nums += $perName;
                 }
             }
@@ -133,5 +145,4 @@ final class Util
 
         return $nums;
     }
-
 }

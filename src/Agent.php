@@ -3,6 +3,7 @@
 namespace think\agent;
 
 use Generator;
+use Swoole\Coroutine\Channel;
 use think\agent\tool\FunctionCall;
 use think\agent\tool\result\Error;
 use think\agent\tool\result\Raw;
@@ -10,6 +11,8 @@ use think\ai\Client;
 use think\ai\Exception;
 use think\helper\Arr;
 use Throwable;
+
+use function Swoole\Coroutine\go;
 
 abstract class Agent
 {
@@ -30,14 +33,48 @@ abstract class Agent
 
     protected $extraParams = [];
 
+    public function run($params)
+    {
+        try {
+            $this->init($params);
+
+            yield from $this->start();
+        } catch (Throwable $e) {
+            yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
+        } finally {
+            if ($this->iterable) {
+                $this->saveChunks();
+            }
+
+            $result = $this->complete();
+            if ($result instanceof Generator) {
+                yield from $result;
+            }
+
+            $this->round     = 0;
+            $this->usage     = 0;
+            $this->chunks    = [];
+            $this->functions = [];
+            $this->plugins   = [];
+        }
+    }
+
+    public function stop()
+    {
+        $this->iterable = false;
+        $this->saveChunks();
+    }
+
     protected function addFunction($key, FunctionCall $func, $args = [])
     {
         $this->functions[$key] = [$func, $args];
+
         return $this;
     }
 
     /**
-     * @param $key
+     * @param mixed $key
+     *
      * @return array{FunctionCall, array}
      */
     protected function getFunction($key)
@@ -45,6 +82,7 @@ abstract class Agent
         if (!isset($this->functions[$key])) {
             return [null, []];
         }
+
         return $this->functions[$key];
     }
 
@@ -71,6 +109,7 @@ abstract class Agent
             'tool' => $tool,
             'args' => $args,
         ];
+
         return $this;
     }
 
@@ -99,7 +138,7 @@ abstract class Agent
         foreach ($this->functions as $name => $function) {
             /** @var FunctionCall $object */
             [$object] = $function;
-            $tools[] = $object->toLlm($name);
+            $tools[]  = $object->toLlm($name);
         }
 
         return $tools;
@@ -131,7 +170,6 @@ abstract class Agent
         $historyMessages = [];
 
         foreach ($messages as $message) {
-
             $assistantMessages = [];
 
             foreach ($message->chunks as $chunk) {
@@ -204,6 +242,7 @@ abstract class Agent
             }
             $historyMessages = $tempHistoryMessages;
         }
+
         return $historyMessages;
     }
 
@@ -213,38 +252,8 @@ abstract class Agent
     {
         $this->tools = $this->buildTools();
         $messages    = $this->buildPromptMessages();
+
         yield from $this->iteration($messages);
-    }
-
-    public function run($params)
-    {
-        try {
-            $this->init($params);
-            yield from $this->start();
-        } catch (Throwable $e) {
-            yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
-        } finally {
-            if ($this->iterable) {
-                $this->saveChunks();
-            }
-
-            $result = $this->complete();
-            if ($result instanceof Generator) {
-                yield from $result;
-            }
-
-            $this->round     = 0;
-            $this->usage     = 0;
-            $this->chunks    = [];
-            $this->functions = [];
-            $this->plugins   = [];
-        }
-    }
-
-    public function stop()
-    {
-        $this->iterable = false;
-        $this->saveChunks();
     }
 
     abstract protected function complete();
@@ -274,7 +283,7 @@ abstract class Agent
 
         try {
             $result = $this->getClient()->chat()->completions($params);
-            $this->round++;
+            ++$this->round;
 
             foreach ($result as $event) {
                 if (!empty($event['delta']['tool_calls'])) {
@@ -284,8 +293,9 @@ abstract class Agent
 
                     if (!isset($calls[$callIndex])) {
                         $calls[$callIndex] = $call;
-                        //下发调用工具的状态
+                        // 下发调用工具的状态
                         $callType = $call['type'];
+
                         switch ($callType) {
                             case 'plugin':
                             case 'mcp':
@@ -295,10 +305,12 @@ abstract class Agent
                                     'title'     => $call[$callType]['title'],
                                     'arguments' => $call[$callType]['arguments'] ?? '',
                                 ];
+
                                 yield from $this->sendToolData($chunkIndex, $callIndex, $data);
+
                                 break;
                             case 'function':
-                                $name = $call['function']['name'];
+                                $name       = $call['function']['name'];
                                 [$function] = $this->getFunction($name);
                                 if ($function) {
                                     $data = [
@@ -307,9 +319,10 @@ abstract class Agent
                                         'title'     => $function->getTitle(),
                                         'arguments' => $call['function']['arguments'] ?? '',
                                     ];
+
                                     yield from $this->sendToolData($chunkIndex, $callIndex, $data);
-                                    $function->prepare();
                                 }
+
                                 break;
                         }
                     } else {
@@ -323,12 +336,15 @@ abstract class Agent
                     }
                 } else {
                     yield from $this->sendTextChunkData($chunkIndex, $event, 'reasoning');
+
                     yield from $this->sendTextChunkData($chunkIndex, $event, 'signature');
+
                     yield from $this->sendTextChunkData($chunkIndex, $event, 'content');
                 }
 
                 if (!empty($event['usage'])) {
                     $this->usage += $event['usage']['total_tokens'];
+
                     yield from $this->sendChunkData($chunkIndex, 'content', '', true);
                 }
             }
@@ -346,84 +362,186 @@ abstract class Agent
 
             $messages[] = $message;
 
-            foreach ($calls as $index => $call) {
-                $id   = $call['id'];
-                $type = $call['type'];
-
-                switch ($type) {
-                    case 'plugin':
-                    case 'mcp':
-                        $result = new Raw([
-                            'response' => $call[$type]['response'],
-                            'content'  => $call[$type]['content'],
-                            'error'    => $call[$type]['error'],
-                            'usage'    => $call[$type]['usage'],
-                        ]);
-                        break;
-                    case 'function':
-                        try {
-                            $name = $call['function']['name'];
-                            [$function, $args] = $this->getFunction($name);
-
-                            if (empty($function)) {
-                                throw new Exception("tool [{$name}] not exist, please check the tool name.");
-                            }
-
-                            $arguments = json_decode($call['function']['arguments'], true);
-
-                            if (!is_array($arguments)) {
-                                $arguments = [];
-                            }
-
-                            $result = $function(array_merge($arguments, $args));
-
-                            if (isset($this->functionHooks[$name])) {
-                                $hookResult = call_user_func($this->functionHooks[$name], $result);
-                                if ($hookResult instanceof Generator) {
-                                    yield from $hookResult;
-                                }
-                            }
-                        } catch (Throwable $e) {
-                            $result = new Error($e);
-                        }
-
-                        $messages[] = [
-                            'tool_call_id' => $id,
-                            'role'         => 'tool',
-                            'name'         => $name,
-                            'content'      => $result->getResponse(),
-                        ];
-                        break;
-                }
-
-                if (!empty($result)) {
-                    //调用工具产生的计费
-                    $this->usage += $result->getUsage();
-
-                    $content = $result->getContent();
-                    if (!empty($content) && is_array($content)) {
-                        switch ($content['type']) {
-                            case 'image':
-                                //图片本地化
-                                $content['image'] = $this->saveImage($content['image']);
-                                break;
-                        }
-                    }
-
-                    //下发调用工具完成的状态
-                    yield from $this->sendToolData($chunkIndex, $index, [
-                        'response' => $result->getResponse(),
-                        'error'    => $result->isError(),
-                        'content'  => $content,
-                    ]);
-                }
+            // 检测是否在 Swoole 协程环境
+            if (Util::inSwooleCoroutine()) {
+                yield from $this->executeToolsInCoroutine($calls, $messages, $chunkIndex);
+            } else {
+                yield from $this->executeToolsSequentially($calls, $messages, $chunkIndex);
             }
 
             if ($this->iterable) {
                 $this->saveChunks();
+
                 yield from $this->iteration($messages);
             }
         }
+    }
+
+    /**
+     * 在协程环境中并发执行工具调用.
+     *
+     * @param array $calls
+     * @param array $messages
+     * @param int   $chunkIndex
+     *
+     * @return Generator
+     */
+    protected function executeToolsInCoroutine($calls, &$messages, $chunkIndex)
+    {
+        $callsSize = count($calls);
+        $chan      = new Channel($callsSize);
+
+        foreach ($calls as $index => $call) {
+            go(function () use ($index, $call, $chan) {
+                $result = $this->executeSingleTool($call, $index);
+                $chan->push($result);
+            });
+        }
+
+        for ($i = 0; $i < $callsSize; ++$i) {
+            $result = $chan->pop();
+            if (!empty($result)) {
+                yield from $this->processToolResult($result, $messages, $chunkIndex);
+            }
+        }
+
+        $chan->close();
+    }
+
+    /**
+     * 顺序执行工具调用（非协程环境）.
+     *
+     * @param array $calls
+     * @param array $messages
+     * @param int   $chunkIndex
+     *
+     * @return Generator
+     */
+    protected function executeToolsSequentially($calls, &$messages, $chunkIndex)
+    {
+        foreach ($calls as $index => $call) {
+            $result = $this->executeSingleTool($call, $index);
+
+            if (!empty($result)) {
+                yield from $this->processToolResult($result, $messages, $chunkIndex);
+            }
+        }
+    }
+
+    /**
+     * 处理工具执行结果.
+     *
+     * @param array $result
+     * @param array $messages
+     * @param int   $chunkIndex
+     *
+     * @return Generator
+     */
+    protected function processToolResult($result, &$messages, $chunkIndex)
+    {
+        // 添加 tool message 到 messages
+        if (!empty($result['message'])) {
+            $messages[] = $result['message'];
+        }
+
+        // 处理 hook Generator
+        if (!empty($result['event'])) {
+            yield from $result['event'];
+        }
+
+        // 下发调用工具完成的状态
+        yield from $this->sendToolData($chunkIndex, $result['index'], $result['data']);
+    }
+
+    /**
+     * 执行单个工具调用.
+     *
+     * @param array $call
+     * @param int   $index
+     *
+     * @return null|array
+     */
+    protected function executeSingleTool($call, $index)
+    {
+        $type = $call['type'];
+
+        switch ($type) {
+            case 'plugin':
+            case 'mcp':
+                $result = new Raw([
+                    'response' => $call[$type]['response'],
+                    'content'  => $call[$type]['content'],
+                    'error'    => $call[$type]['error'],
+                    'usage'    => $call[$type]['usage'],
+                ]);
+                break;
+            case 'function':
+                try {
+                    $name              = $call['function']['name'];
+                    [$function, $args] = $this->getFunction($name);
+
+                    if (empty($function)) {
+                        throw new Exception("tool [{$name}] not exist, please check the tool name.");
+                    }
+
+                    $argumentsJson = trim($call['function']['arguments']);
+                    $arguments     = json_decode($argumentsJson, true);
+
+                    if (!is_array($arguments)) {
+                        if (!empty($argumentsJson)) {
+                            throw new Exception("Invalid JSON format for tool [{$name}] arguments: " . json_last_error_msg());
+                        }
+                        $arguments = [];
+                    }
+
+                    $result = $function(array_merge($arguments, $args));
+
+                    if (isset($this->functionHooks[$name])) {
+                        $hookResult = call_user_func($this->functionHooks[$name], $result);
+                        if ($hookResult instanceof Generator) {
+                            $event = $hookResult;
+                        }
+                    }
+                } catch (Throwable $e) {
+                    $result = new Error($e);
+                }
+
+                $message = [
+                    'tool_call_id' => $call['id'],
+                    'role'         => 'tool',
+                    'name'         => $name,
+                    'content'      => $result->getResponse(),
+                ];
+                break;
+        }
+
+        if (!empty($result)) {
+            // 调用工具产生的计费
+            $this->usage += $result->getUsage();
+
+            $content = $result->getContent();
+            if (!empty($content) && is_array($content)) {
+                switch ($content['type']) {
+                    case 'image':
+                        // 图片本地化
+                        $content['image'] = $this->saveImage($content['image']);
+                        break;
+                }
+            }
+
+            return [
+                'index' => $index,
+                'data'  => [
+                    'response' => $result->getResponse(),
+                    'error'    => $result->isError(),
+                    'content'  => $content,
+                ],
+                'message' => $message ?? null,
+                'event'   => $event   ?? null,
+            ];
+        }
+
+        return null;
     }
 
     protected function getMessageContent($message)
@@ -449,7 +567,7 @@ abstract class Agent
     protected function sendTextChunkData($chunkIndex, $event, $key)
     {
         $text = $event['delta'][$key] ?? '';
-        if ($text !== '') {//这里必须和''强比较，防止0等字符不能输出
+        if ('' !== $text) {// 这里必须和''强比较，防止0等字符不能输出
             yield from $this->sendChunkData($chunkIndex, $key, $text, true);
         }
     }

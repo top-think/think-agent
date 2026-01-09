@@ -29,7 +29,6 @@ class OpenApi extends Plugin
                 $this->openApi = $this->readFromYamlFile();
             }
         } catch (Throwable) {
-
         }
         if ($auth) {
             $this->auth = $auth;
@@ -54,7 +53,7 @@ class OpenApi extends Plugin
     public function getCredentials()
     {
         try {
-            if (!empty($this->auth['provider']) && $this->auth['provider'] == 'user') {
+            if (!empty($this->auth['provider']) && 'user' == $this->auth['provider']) {
                 switch ($this->auth['type']) {
                     case 'http':
                         switch ($this->auth['scheme']) {
@@ -95,8 +94,8 @@ class OpenApi extends Plugin
                 }
             }
         } catch (Exception) {
-
         }
+
         return null;
     }
 
@@ -109,22 +108,18 @@ class OpenApi extends Plugin
 
         foreach ($this->openApi->paths as $path => $definition) {
             foreach ($definition->getOperations() as $method => $operation) {
-
                 if (empty($operation->operationId) || empty($operation->summary) || empty($operation->description)) {
                     continue;
                 }
 
                 $tools[] = new class($this->openApi, $path, $method, $operation, $this->auth) extends FunctionCall {
-
                     public function __construct(
                         protected \cebe\openapi\spec\OpenApi $openApi,
-                        protected                            $path,
-                        protected                            $method,
-                        protected Operation                  $operation,
-                        protected                            $auth
-                    )
-                    {
-                    }
+                        protected $path,
+                        protected $method,
+                        protected Operation $operation,
+                        protected $auth
+                    ) {}
 
                     public function getTitle()
                     {
@@ -178,7 +173,7 @@ class OpenApi extends Plugin
                         if (isset($this->operation->requestBody?->content)) {
                             foreach ($this->operation->requestBody->content as $content) {
                                 if (isset($content->schema)) {
-                                    $required   = $content->schema->required ?? [];
+                                    $required   = $content->schema->required   ?? [];
                                     $properties = $content->schema->properties ?? [];
 
                                     foreach ($properties as $name => $property) {
@@ -212,6 +207,7 @@ class OpenApi extends Plugin
                         if (empty($parameters)) {
                             return null;
                         }
+
                         return $parameters;
                     }
 
@@ -302,7 +298,7 @@ class OpenApi extends Plugin
                                 if (isset($content->schema)) {
                                     $data = [];
 
-                                    $required   = $content->schema->required ?? [];
+                                    $required   = $content->schema->required   ?? [];
                                     $properties = $content->schema->properties ?? [];
 
                                     foreach ($properties as $name => $property) {
@@ -346,7 +342,7 @@ class OpenApi extends Plugin
 
                         if (str_contains($contentType, 'application/json')) {
                             $content = json_decode($content, true);
-                            if (json_last_error() !== JSON_ERROR_NONE) {
+                            if (JSON_ERROR_NONE !== json_last_error()) {
                                 throw new Exception('Invalid response: ' . json_last_error_msg());
                             }
                         }

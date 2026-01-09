@@ -11,35 +11,19 @@ use think\helper\Str;
 
 abstract class FunctionCall implements JsonSerializable
 {
-    protected $name        = null;
-    protected $title       = null;
-    protected $description = null;
-    protected $parameters  = null;
+    protected $name;
+    protected $title;
+    protected $description;
+    protected $parameters;
 
-    protected $extra = null;
+    protected $extra;
 
     /** @var Credentials */
     private $credentials;
 
-    public function setCredentials(Credentials $credentials)
-    {
-        $this->credentials = $credentials;
-        return $this;
-    }
-
-    public function getCredential($name, $default = null)
-    {
-        if (!$this->credentials) {
-            if ($default) {
-                return $default;
-            }
-            throw new Exception('插件尚未授权');
-        }
-        return $this->credentials->get($name) ?: $default;
-    }
-
     /**
-     * @param $args
+     * @param mixed $args
+     *
      * @return Result
      */
     public function __invoke($args)
@@ -49,15 +33,29 @@ abstract class FunctionCall implements JsonSerializable
         if (!$res instanceof Result) {
             $res = new Plain($res);
         }
+
         return $res;
     }
 
-    public function prepare()
+    public function setCredentials(Credentials $credentials)
     {
+        $this->credentials = $credentials;
 
+        return $this;
     }
 
-    abstract protected function run(Args $args);
+    public function getCredential($name, $default = null)
+    {
+        if (!$this->credentials) {
+            if ($default) {
+                return $default;
+            }
+
+            throw new Exception('插件尚未授权');
+        }
+
+        return $this->credentials->get($name) ?: $default;
+    }
 
     public function getExtra()
     {
@@ -124,6 +122,7 @@ abstract class FunctionCall implements JsonSerializable
         if ($this->name) {
             return $this->name;
         }
+
         return Str::snake(class_basename(static::class));
     }
 
@@ -157,4 +156,6 @@ abstract class FunctionCall implements JsonSerializable
             'fee'         => $this->getFee(),
         ];
     }
+
+    abstract protected function run(Args $args);
 }

@@ -2,7 +2,9 @@
 
 namespace think\agent;
 
-class Credentials implements \JsonSerializable
+use JsonSerializable;
+
+class Credentials implements JsonSerializable
 {
     protected $data = [];
 
@@ -13,20 +15,27 @@ class Credentials implements \JsonSerializable
         }
     }
 
+    public function __toString(): string
+    {
+        return json_encode($this->data);
+    }
+
     public static function make(array $data, array $schema)
     {
         $credentials = new self();
         $credentials->set($data, $schema);
+
         return $credentials;
     }
 
     public function set(array $data, array $schema)
     {
-        //加密
+        // 加密
         foreach ($data as $key => &$value) {
             if (isset($this->data[$key])) {
                 if ($value == $this->get($key, true)) {
                     $value = $this->data[$key];
+
                     continue;
                 }
             }
@@ -49,12 +58,8 @@ class Credentials implements \JsonSerializable
                 return Util::maskString($value);
             }
         }
-        return $value;
-    }
 
-    public function __toString(): string
-    {
-        return json_encode($this->data);
+        return $value;
     }
 
     public function jsonSerialize(): mixed
@@ -63,13 +68,14 @@ class Credentials implements \JsonSerializable
             if (str_starts_with($value, '@encrypted:')) {
                 return Util::maskString($this->decrypt($value));
             }
+
             return $value;
         }, $this->data);
     }
 
     protected function encrypt($value)
     {
-        return "@encrypted:" . openssl_encrypt($value, 'AES-128-ECB', config('app.token'));
+        return '@encrypted:' . openssl_encrypt($value, 'AES-128-ECB', config('app.token'));
     }
 
     protected function decrypt($value)
