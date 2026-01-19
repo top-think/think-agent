@@ -7,6 +7,7 @@ use Swoole\Coroutine\Channel;
 use think\agent\tool\FunctionCall;
 use think\agent\tool\result\Error;
 use think\agent\tool\result\Raw;
+use think\agent\tool\result\Suspend;
 use think\ai\Client;
 use think\ai\Exception;
 use think\helper\Arr;
@@ -33,19 +34,18 @@ abstract class Agent
 
     protected $extraParams = [];
 
-    public function run($params)
+    public function run($params, $resume = false)
     {
         try {
-            $this->init($params);
+            $this->init($params, $resume);
+            $this->buildTools();
 
-            yield from $this->start();
+            $messages = $this->buildPromptMessages($resume);
+
+            yield from $this->iteration($messages);
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
         } finally {
-            if ($this->iterable) {
-                $this->saveChunks();
-            }
-
             $result = $this->complete();
             if ($result instanceof Generator) {
                 yield from $result;
@@ -62,7 +62,6 @@ abstract class Agent
     public function stop()
     {
         $this->iterable = false;
-        $this->saveChunks();
     }
 
     protected function addFunction($key, FunctionCall $func, $args = [])
@@ -116,7 +115,7 @@ abstract class Agent
     protected function buildTools()
     {
         if (!$this->canUseTool) {
-            return null;
+            return;
         }
 
         $tools = [];
@@ -141,7 +140,7 @@ abstract class Agent
             $tools[]  = $object->toLlm($name);
         }
 
-        return $tools;
+        $this->tools = $tools;
     }
 
     protected function getSystemVars()
@@ -163,7 +162,7 @@ abstract class Agent
         return $prompt;
     }
 
-    abstract protected function buildPromptMessages();
+    abstract protected function buildPromptMessages($resume = false);
 
     protected function buildHistoryMessages($messages, $maxTokens = 0)
     {
@@ -246,15 +245,7 @@ abstract class Agent
         return $historyMessages;
     }
 
-    abstract protected function init($params);
-
-    protected function start()
-    {
-        $this->tools = $this->buildTools();
-        $messages    = $this->buildPromptMessages();
-
-        yield from $this->iteration($messages);
-    }
+    abstract protected function init($params, $resume = false);
 
     abstract protected function complete();
 
@@ -370,8 +361,6 @@ abstract class Agent
             }
 
             if ($this->iterable) {
-                $this->saveChunks();
-
                 yield from $this->iteration($messages);
             }
         }
@@ -477,7 +466,8 @@ abstract class Agent
                 break;
             case 'function':
                 try {
-                    $name              = $call['function']['name'];
+                    $name = $call['function']['name'];
+
                     [$function, $args] = $this->getFunction($name);
 
                     if (empty($function)) {
@@ -495,6 +485,10 @@ abstract class Agent
                     }
 
                     $result = $function(array_merge($arguments, $args));
+
+                    if ($result instanceof Suspend) {
+                        $this->iterable = false;
+                    }
 
                     if (isset($this->functionHooks[$name])) {
                         $hookResult = call_user_func($this->functionHooks[$name], $result);
@@ -521,7 +515,7 @@ abstract class Agent
 
             $content = $result->getContent();
             if (!empty($content) && is_array($content)) {
-                switch ($content['type']) {
+                switch ($content['type'] ?? null) {
                     case 'image':
                         // 图片本地化
                         $content['image'] = $this->saveImage($content['image']);
@@ -573,8 +567,6 @@ abstract class Agent
     }
 
     abstract protected function getClient(): Client;
-
-    abstract protected function saveChunks();
 
     protected function saveImage($image)
     {
