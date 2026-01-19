@@ -44,14 +44,12 @@ abstract class Agent
             $this->buildTools();
 
             $messages = $this->buildPromptMessages();
+            yield from $this->handleCallback($this->start($params));
             yield from $this->iteration($messages);
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
         } finally {
-            $result = $this->complete();
-            if ($result instanceof Generator) {
-                yield from $result;
-            }
+            yield from $this->handleCallback($this->complete());
 
             $this->round     = 0;
             $this->usage     = 0;
@@ -65,6 +63,22 @@ abstract class Agent
     {
         $this->iterable = false;
     }
+
+    /**
+     * 统一处理回调结果，如果是迭代器则 yield from
+     *
+     * @param mixed $result
+     *
+     * @return Generator
+     */
+    protected function handleCallback($result)
+    {
+        if ($result instanceof Generator) {
+            yield from $result;
+        }
+    }
+
+    protected function start($params) {}
 
     protected function addFunction($key, FunctionCall $func, $args = [])
     {
