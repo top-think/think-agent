@@ -403,14 +403,23 @@ abstract class Agent
             });
         }
 
+        $suspend = false;
         for ($i = 0; $i < $callsSize; ++$i) {
             $result = $chan->pop();
             if (!empty($result)) {
+                if ($result['suspend']) {
+                    $suspend = true;
+                }
                 yield from $this->processToolResult($result, $messages, $chunkIndex);
             }
         }
 
         $chan->close();
+
+        if ($suspend) {
+            $this->iterable = false;
+            yield ['suspend' => true];
+        }
     }
 
     /**
@@ -424,12 +433,21 @@ abstract class Agent
      */
     protected function executeToolsSequentially($calls, &$messages, $chunkIndex)
     {
+        $suspend = false;
         foreach ($calls as $index => $call) {
             $result = $this->executeSingleTool($call, $index);
 
             if (!empty($result)) {
+                if ($result['suspend']) {
+                    $suspend = true;
+                }
                 yield from $this->processToolResult($result, $messages, $chunkIndex);
             }
+        }
+
+        if ($suspend) {
+            $this->iterable = false;
+            yield ['suspend' => true];
         }
     }
 
@@ -503,11 +521,7 @@ abstract class Agent
                     $result = $function(array_merge($arguments, $args));
 
                     if ($result instanceof Suspend) {
-                        $this->iterable = false;
-
-                        $event = value(function () {
-                            yield ['suspend' => true];
-                        });
+                        $suspend = true;
                     }
 
                     if (isset($this->functionHooks[$name])) {
@@ -552,6 +566,7 @@ abstract class Agent
                 ],
                 'message' => $message ?? null,
                 'event'   => $event   ?? null,
+                'suspend' => $suspend ?? false,
             ];
         }
 

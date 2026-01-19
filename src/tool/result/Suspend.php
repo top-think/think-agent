@@ -10,7 +10,7 @@ class Suspend extends Result
 
     public function getResponse()
     {
-        return '';
+        return '(Empty)';
     }
 
     public function getContent()
