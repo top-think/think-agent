@@ -65,7 +65,7 @@ abstract class Agent
     }
 
     /**
-     * 统一处理回调结果，如果是迭代器则 yield from
+     * 统一处理回调结果，如果是迭代器则 yield from.
      *
      * @param mixed $result
      *
@@ -213,7 +213,7 @@ abstract class Agent
                             'tool_call_id' => $tool['id'],
                             'role'         => 'tool',
                             'name'         => $tool['name'],
-                            'content'      => $tool['response'],
+                            'content'      => is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']),
                         ];
                     }
 
@@ -504,6 +504,10 @@ abstract class Agent
 
                     if ($result instanceof Suspend) {
                         $this->iterable = false;
+
+                        $event = value(function () {
+                            yield ['suspend' => true];
+                        });
                     }
 
                     if (isset($this->functionHooks[$name])) {

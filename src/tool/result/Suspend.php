@@ -2,9 +2,16 @@
 
 namespace think\agent\tool\result;
 
-class Suspend
+use think\agent\tool\Result;
+
+class Suspend extends Result
 {
     public function __construct(protected $content) {}
+
+    public function getResponse()
+    {
+        return '';
+    }
 
     public function getContent()
     {
