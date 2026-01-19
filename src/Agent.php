@@ -32,16 +32,18 @@ abstract class Agent
     protected $canUseTool = false;
     protected $iterable   = true;
 
+    protected $isResume = false;
+
     protected $extraParams = [];
 
     public function run($params, $resume = false)
     {
         try {
-            $this->init($params, $resume);
+            $this->isResume = $resume;
+            $this->init($params);
             $this->buildTools();
 
-            $messages = $this->buildPromptMessages($resume);
-
+            $messages = $this->buildPromptMessages();
             yield from $this->iteration($messages);
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
@@ -162,7 +164,7 @@ abstract class Agent
         return $prompt;
     }
 
-    abstract protected function buildPromptMessages($resume = false);
+    abstract protected function buildPromptMessages();
 
     protected function buildHistoryMessages($messages, $maxTokens = 0)
     {
@@ -245,7 +247,7 @@ abstract class Agent
         return $historyMessages;
     }
 
-    abstract protected function init($params, $resume = false);
+    abstract protected function init($params);
 
     abstract protected function complete();
 
