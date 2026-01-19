@@ -42,9 +42,10 @@ abstract class Agent
             $this->isResume = $resume;
             $this->init($params);
             $this->buildTools();
+            
+            yield from $this->handleCallback($this->start($params));
 
             $messages = $this->buildPromptMessages();
-            yield from $this->handleCallback($this->start($params));
             yield from $this->iteration($messages);
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
