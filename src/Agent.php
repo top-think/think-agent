@@ -42,7 +42,7 @@ abstract class Agent
             $this->isResume = $resume;
             $this->init($params);
             $this->buildTools();
-            
+
             yield from $this->handleCallback($this->start($params));
 
             $messages = $this->buildPromptMessages();
@@ -118,12 +118,13 @@ abstract class Agent
         return $this;
     }
 
-    protected function addPlugin($name, $tool, $args = [])
+    protected function addPlugin($name, $tool, $args = [], ...$others = [])
     {
         $this->plugins[] = [
             'name' => $name,
             'tool' => $tool,
             'args' => $args,
+            ...$others,
         ];
 
         return $this;
