@@ -118,7 +118,7 @@ abstract class Agent
         return $this;
     }
 
-    protected function addPlugin($name, $tool, $args = [], ...$others = [])
+    protected function addPlugin($name, $tool, $args = [], $others = [])
     {
         $this->plugins[] = [
             'name' => $name,
