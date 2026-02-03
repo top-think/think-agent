@@ -12,25 +12,24 @@ use think\ai\Client;
 use think\ai\Exception;
 use think\helper\Arr;
 use Throwable;
-
 use function Swoole\Coroutine\go;
 
 abstract class Agent
 {
     protected $config = [];
 
-    protected $usage      = 0;
-    protected $round      = 0;
-    protected $chunks     = [];
-    protected $functions  = [];
-    protected $plugins    = [];
+    protected $usage = 0;
+    protected $round = 0;
+    protected $chunks = [];
+    protected $functions = [];
+    protected $plugins = [];
     protected $mcpServers = [];
-    protected $tools      = [];
+    protected $tools = [];
 
     protected $functionHooks = [];
 
     protected $canUseTool = false;
-    protected $iterable   = true;
+    protected $iterable = true;
 
     protected $isResume = false;
 
@@ -79,7 +78,9 @@ abstract class Agent
         }
     }
 
-    protected function start($params) {}
+    protected function start($params)
+    {
+    }
 
     protected function addFunction($key, FunctionCall $func, $args = [])
     {
@@ -155,7 +156,7 @@ abstract class Agent
         foreach ($this->functions as $name => $function) {
             /** @var FunctionCall $object */
             [$object] = $function;
-            $tools[]  = $object->toLlm($name);
+            $tools[] = $object->toLlm($name);
         }
 
         $this->tools = $tools;
@@ -182,64 +183,76 @@ abstract class Agent
 
     abstract protected function buildPromptMessages();
 
+    protected function getMessageContent($message)
+    {
+        return $message->content;
+    }
+
+    protected function getMessageChunks($message)
+    {
+        $assistantMessages = [];
+
+        foreach ($message->chunks as $chunk) {
+            if (!empty($chunk['error'])) {
+                continue;
+            }
+            if (!empty($chunk['tools'])) {
+                if (!$this->canUseTool) {
+                    break;
+                }
+
+                $calls     = [];
+                $responses = [];
+
+                foreach ($chunk['tools'] as $tool) {
+                    $calls[] = [
+                        'id'       => $tool['id'],
+                        'type'     => 'function',
+                        'function' => [
+                            'name'      => $tool['name'],
+                            'arguments' => $tool['arguments'],
+                        ],
+                    ];
+
+                    $responses[] = [
+                        'tool_call_id' => $tool['id'],
+                        'role'         => 'tool',
+                        'name'         => $tool['name'],
+                        'content'      => is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']),
+                    ];
+                }
+
+                if (empty($calls)) {
+                    continue;
+                }
+
+                $assistantMessage = [
+                    'role'       => 'assistant',
+                    'tool_calls' => $calls,
+                ];
+
+                $this->updateMessageText($assistantMessage, $chunk);
+
+                $assistantMessages[] = $assistantMessage;
+
+                $assistantMessages = array_merge($assistantMessages, $responses);
+            } else {
+                $assistantMessages[] = [
+                    'role'    => 'assistant',
+                    'content' => empty($chunk['content']) ? 'None' : $chunk['content'],
+                ];
+            }
+        }
+
+        return $assistantMessages;
+    }
+
     protected function buildHistoryMessages($messages, $maxTokens = 0)
     {
         $historyMessages = [];
 
         foreach ($messages as $message) {
-            $assistantMessages = [];
-
-            foreach ($message->chunks as $chunk) {
-                if (!empty($chunk['error'])) {
-                    continue;
-                }
-                if (!empty($chunk['tools'])) {
-                    if (!$this->canUseTool) {
-                        break 2;
-                    }
-
-                    $calls     = [];
-                    $responses = [];
-
-                    foreach ($chunk['tools'] as $tool) {
-                        $calls[] = [
-                            'id'       => $tool['id'],
-                            'type'     => 'function',
-                            'function' => [
-                                'name'      => $tool['name'],
-                                'arguments' => $tool['arguments'],
-                            ],
-                        ];
-
-                        $responses[] = [
-                            'tool_call_id' => $tool['id'],
-                            'role'         => 'tool',
-                            'name'         => $tool['name'],
-                            'content'      => is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']),
-                        ];
-                    }
-
-                    if (empty($calls)) {
-                        continue;
-                    }
-
-                    $assistantMessage = [
-                        'role'       => 'assistant',
-                        'tool_calls' => $calls,
-                    ];
-
-                    $this->updateMessageText($assistantMessage, $chunk);
-
-                    $assistantMessages[] = $assistantMessage;
-
-                    $assistantMessages = array_merge($assistantMessages, $responses);
-                } else {
-                    $assistantMessages[] = [
-                        'role'    => 'assistant',
-                        'content' => empty($chunk['content']) ? 'None' : $chunk['content'],
-                    ];
-                }
-            }
+            $assistantMessages = $this->getMessageChunks($message);
 
             if (empty($assistantMessages)) {
                 continue;
@@ -319,7 +332,7 @@ abstract class Agent
 
                                 break;
                             case 'function':
-                                $name       = $call['function']['name'];
+                                $name = $call['function']['name'];
                                 [$function] = $this->getFunction($name);
                                 if ($function) {
                                     $data = [
@@ -389,7 +402,7 @@ abstract class Agent
      *
      * @param array $calls
      * @param array $messages
-     * @param int   $chunkIndex
+     * @param int $chunkIndex
      *
      * @return Generator
      */
@@ -429,7 +442,7 @@ abstract class Agent
      *
      * @param array $calls
      * @param array $messages
-     * @param int   $chunkIndex
+     * @param int $chunkIndex
      *
      * @return Generator
      */
@@ -458,7 +471,7 @@ abstract class Agent
      *
      * @param array $result
      * @param array $messages
-     * @param int   $chunkIndex
+     * @param int $chunkIndex
      *
      * @return Generator
      */
@@ -482,7 +495,7 @@ abstract class Agent
      * 执行单个工具调用.
      *
      * @param array $call
-     * @param int   $index
+     * @param int $index
      *
      * @return null|array
      */
@@ -560,24 +573,19 @@ abstract class Agent
             }
 
             return [
-                'index' => $index,
-                'data'  => [
+                'index'   => $index,
+                'data'    => [
                     'response' => $result->getResponse(),
                     'error'    => $result->isError(),
                     'content'  => $content,
                 ],
                 'message' => $message ?? null,
-                'event'   => $event   ?? null,
+                'event'   => $event ?? null,
                 'suspend' => $suspend ?? false,
             ];
         }
 
         return null;
-    }
-
-    protected function getMessageContent($message)
-    {
-        return $message->content;
     }
 
     protected function updateMessageText(&$message, $chunk)
