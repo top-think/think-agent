@@ -376,7 +376,7 @@ abstract class Agent
             yield from $this->sendChunkData($chunkIndex, 'error', $e->getMessage());
         }
 
-        if (!empty($calls)) {
+        if (!empty($calls) && $this->iterable) {
             $message = [
                 'role'       => 'assistant',
                 'tool_calls' => $calls,
@@ -622,17 +622,19 @@ abstract class Agent
 
     protected function sendToolArguments($chunkIndex, $toolIndex, $arguments)
     {
-        $this->updateChunk($chunkIndex, "tools.{$toolIndex}.arguments", $arguments, true);
+        if ($this->iterable) {
+            $this->updateChunk($chunkIndex, "tools.{$toolIndex}.arguments", $arguments, true);
 
-        yield [
-            'chunks' => [
-                'index' => $chunkIndex,
-                'tools' => [
-                    'index'     => $toolIndex,
-                    'arguments' => $arguments,
+            yield [
+                'chunks' => [
+                    'index' => $chunkIndex,
+                    'tools' => [
+                        'index'     => $toolIndex,
+                        'arguments' => $arguments,
+                    ],
                 ],
-            ],
-        ];
+            ];
+        }
     }
 
     protected function sendToolData($chunkIndex, $toolIndex, $data)
