@@ -622,19 +622,17 @@ abstract class Agent
 
     protected function sendToolArguments($chunkIndex, $toolIndex, $arguments)
     {
-        if ($this->iterable) {
-            $this->updateChunk($chunkIndex, "tools.{$toolIndex}.arguments", $arguments, true);
+        $this->updateChunk($chunkIndex, "tools.{$toolIndex}.arguments", $arguments, true);
 
-            yield [
-                'chunks' => [
-                    'index' => $chunkIndex,
-                    'tools' => [
-                        'index'     => $toolIndex,
-                        'arguments' => $arguments,
-                    ],
+        yield [
+            'chunks' => [
+                'index' => $chunkIndex,
+                'tools' => [
+                    'index'     => $toolIndex,
+                    'arguments' => $arguments,
                 ],
-            ];
-        }
+            ],
+        ];
     }
 
     protected function sendToolData($chunkIndex, $toolIndex, $data)
