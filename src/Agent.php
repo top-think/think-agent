@@ -30,6 +30,7 @@ abstract class Agent
 
     protected $canUseTool = false;
     protected $iterable = true;
+    protected $stopped = false;
 
     protected $isResume = false;
 
@@ -62,6 +63,7 @@ abstract class Agent
     public function stop()
     {
         $this->iterable = false;
+        $this->stopped  = true;
     }
 
     /**
@@ -205,7 +207,7 @@ abstract class Agent
                 $responses = [];
 
                 foreach ($chunk['tools'] as $tool) {
-                    $calls[] = [
+                    $calls[]     = [
                         'id'       => $tool['id'],
                         'type'     => 'function',
                         'function' => [
@@ -213,12 +215,12 @@ abstract class Agent
                             'arguments' => $tool['arguments'],
                         ],
                     ];
-
+                    $content     = empty($tool['content']) ? '(Canceled)' : (is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']));
                     $responses[] = [
                         'tool_call_id' => $tool['id'],
                         'role'         => 'tool',
                         'name'         => $tool['name'],
-                        'content'      => is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']),
+                        'content'      => $content,
                     ];
                 }
 
