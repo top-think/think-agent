@@ -215,7 +215,7 @@ abstract class Agent
                             'arguments' => $tool['arguments'],
                         ],
                     ];
-                    $content     = empty($tool['content']) ? '(Canceled)' : (is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']));
+                    $content     = empty($tool['response']) ? '(Canceled)' : (is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']));
                     $responses[] = [
                         'tool_call_id' => $tool['id'],
                         'role'         => 'tool',
