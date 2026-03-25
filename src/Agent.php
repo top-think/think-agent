@@ -6,6 +6,7 @@ use Generator;
 use Swoole\Coroutine\Channel;
 use think\agent\tool\FunctionCall;
 use think\agent\tool\result\Error;
+use think\agent\tool\result\Plain;
 use think\agent\tool\result\Raw;
 use think\agent\tool\result\Suspend;
 use think\ai\Client;
@@ -386,12 +387,7 @@ abstract class Agent
 
             $messages[] = $message;
 
-            // 检测是否在 Swoole 协程环境
-            if (Util::inSwooleCoroutine()) {
-                yield from $this->executeToolsInCoroutine($calls, $messages, $chunkIndex);
-            } else {
-                yield from $this->executeToolsSequentially($calls, $messages, $chunkIndex);
-            }
+            yield from $this->executeToolsInCoroutine($calls, $messages, $chunkIndex);
 
             if ($this->iterable) {
                 yield from $this->iteration($messages);
@@ -411,20 +407,42 @@ abstract class Agent
     protected function executeToolsInCoroutine($calls, &$messages, $chunkIndex)
     {
         $callsSize = count($calls);
-        $chan      = new Channel($callsSize);
+        $chan      = new Channel(max(1, $callsSize * 4));
 
         foreach ($calls as $index => $call) {
             go(function () use ($index, $call, $chan) {
-                $result = $this->executeSingleTool($call, $index);
-                $chan->push($result);
+                $result = $this->executeSingleTool($call, $index, function ($progress) use ($index, $chan) {
+                    $chan->push([
+                        'type'  => 'progress',
+                        'index' => $index,
+                        'data'  => $progress,
+                    ]);
+                });
+                $chan->push([
+                    'type'   => 'result',
+                    'result' => $result,
+                ]);
             });
         }
 
         $suspend = false;
-        for ($i = 0; $i < $callsSize; ++$i) {
-            $result = $chan->pop();
+        $done    = 0;
+        while ($done < $callsSize) {
+            $item = $chan->pop();
+            if (empty($item)) {
+                continue;
+            }
+
+            if (($item['type'] ?? null) === 'progress') {
+                yield from $this->sendToolProgress($chunkIndex, $item['index'], $item['data']);
+                continue;
+            }
+
+            ++$done;
+
+            $result = $item['result'] ?? null;
             if (!empty($result)) {
-                if ($result['suspend']) {
+                if (!empty($result['suspend'])) {
                     $suspend = true;
                 }
                 yield from $this->processToolResult($result, $messages, $chunkIndex);
@@ -432,35 +450,6 @@ abstract class Agent
         }
 
         $chan->close();
-
-        if ($suspend) {
-            $this->iterable = false;
-            yield ['suspend' => true];
-        }
-    }
-
-    /**
-     * 顺序执行工具调用（非协程环境）.
-     *
-     * @param array $calls
-     * @param array $messages
-     * @param int $chunkIndex
-     *
-     * @return Generator
-     */
-    protected function executeToolsSequentially($calls, &$messages, $chunkIndex)
-    {
-        $suspend = false;
-        foreach ($calls as $index => $call) {
-            $result = $this->executeSingleTool($call, $index);
-
-            if (!empty($result)) {
-                if ($result['suspend']) {
-                    $suspend = true;
-                }
-                yield from $this->processToolResult($result, $messages, $chunkIndex);
-            }
-        }
 
         if ($suspend) {
             $this->iterable = false;
@@ -501,7 +490,7 @@ abstract class Agent
      *
      * @return null|array
      */
-    protected function executeSingleTool($call, $index)
+    protected function executeSingleTool($call, $index, $progressEmitter)
     {
         $type = $call['type'];
 
@@ -535,7 +524,17 @@ abstract class Agent
                         $arguments = [];
                     }
 
-                    $result = $function(array_merge($arguments, $args));
+                    $runtimeArgs = array_merge($arguments, $args);
+
+                    $invoked = $function($runtimeArgs);
+                    if ($invoked instanceof Generator) {
+                        foreach ($invoked as $progress) {
+                            $progressEmitter($progress);
+                        }
+                        $invoked = $invoked->getReturn();
+                    }
+
+                    $result = $this->normalizeToolResult($invoked);
 
                     if ($result instanceof Suspend) {
                         $suspend = true;
@@ -620,6 +619,15 @@ abstract class Agent
         return $image;
     }
 
+    protected function normalizeToolResult($value)
+    {
+        if ($value instanceof \think\agent\tool\Result) {
+            return $value;
+        }
+
+        return new Plain($value);
+    }
+
     protected function sendToolArguments($chunkIndex, $toolIndex, $arguments)
     {
         if ($this->iterable) {
@@ -635,6 +643,29 @@ abstract class Agent
                 ],
             ];
         }
+    }
+
+    protected function sendToolProgress($chunkIndex, $toolIndex, $progress)
+    {
+        if (!$this->iterable) {
+            return;
+        }
+
+        if (!is_array($progress)) {
+            $progress = [
+                'message' => (string)$progress,
+            ];
+        }
+
+        yield [
+            'chunks' => [
+                'index' => $chunkIndex,
+                'tools' => [
+                    'index' => $toolIndex,
+                    ...$progress
+                ],
+            ],
+        ];
     }
 
     protected function sendToolData($chunkIndex, $toolIndex, $data)

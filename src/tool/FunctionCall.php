@@ -2,9 +2,9 @@
 
 namespace think\agent\tool;
 
+use Generator;
 use JsonSerializable;
 use think\agent\Credentials;
-use think\agent\tool\result\Plain;
 use think\ai\Exception;
 use think\helper\Arr;
 use think\helper\Str;
@@ -24,17 +24,11 @@ abstract class FunctionCall implements JsonSerializable
     /**
      * @param mixed $args
      *
-     * @return Result
+     * @return mixed
      */
     public function __invoke($args)
     {
-        $res = $this->run(new Args($args));
-
-        if (!$res instanceof Result) {
-            $res = new Plain($res);
-        }
-
-        return $res;
+        return $this->run(new Args($args));
     }
 
     public function setCredentials(Credentials $credentials)
