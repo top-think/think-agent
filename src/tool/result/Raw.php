@@ -9,6 +9,7 @@ class Raw extends Result
 {
     protected $response;
     protected $content;
+    protected $metadata;
 
     public function __construct($result)
     {
@@ -16,6 +17,7 @@ class Raw extends Result
         $this->response = Arr::get($result, 'response');
         $this->error    = Arr::get($result, 'error', false);
         $this->usage    = Arr::get($result, 'usage', 0);
+        $this->metadata = Arr::get($result, 'metadata');
     }
 
     public function getContent()
@@ -26,5 +28,10 @@ class Raw extends Result
     public function getResponse()
     {
         return $this->response;
+    }
+
+    public function getMetadata()
+    {
+        return $this->metadata;
     }
 }

@@ -579,6 +579,7 @@ abstract class Agent
                     'response' => $result->getResponse(),
                     'error'    => $result->isError(),
                     'content'  => $content,
+                    'metadata' => $result->getMetadata()
                 ],
                 'message' => $message ?? null,
                 'event'   => $event ?? null,

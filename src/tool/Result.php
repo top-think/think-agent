@@ -29,5 +29,10 @@ abstract class Result
         return '';
     }
 
+    public function getMetadata()
+    {
+        return null;
+    }
+
     abstract public function getResponse();
 }
