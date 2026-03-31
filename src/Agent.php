@@ -11,6 +11,7 @@ use think\agent\tool\result\Raw;
 use think\agent\tool\result\Suspend;
 use think\ai\Client;
 use think\ai\Exception;
+use think\facade\Log;
 use think\helper\Arr;
 use Throwable;
 use function Swoole\Coroutine\go;
@@ -50,6 +51,7 @@ abstract class Agent
             yield from $this->iteration($messages);
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
+            Log::error("{$e->getMessage()}\n{$e->getTraceAsString()}");
         } finally {
             yield from $this->handleCallback($this->complete());
 
