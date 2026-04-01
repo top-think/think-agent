@@ -377,6 +377,7 @@ abstract class Agent
             }
         } catch (Throwable $e) {
             yield from $this->sendChunkData($chunkIndex, 'error', $e->getMessage());
+            Log::error("{$e->getMessage()}\n{$e->getTraceAsString()}");
         }
 
         if (!empty($calls) && $this->iterable) {
