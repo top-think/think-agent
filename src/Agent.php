@@ -242,10 +242,14 @@ abstract class Agent
 
                 $assistantMessages = array_merge($assistantMessages, $responses);
             } else {
-                $assistantMessages[] = [
+                $assistantMessage = [
                     'role'    => 'assistant',
-                    'content' => empty($chunk['content']) ? 'None' : $chunk['content'],
+                    'content' => 'None',
                 ];
+
+                $this->updateMessageText($assistantMessage, $chunk);
+
+                $assistantMessages[] = $assistantMessage;
             }
         }
 
