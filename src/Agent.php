@@ -193,7 +193,7 @@ abstract class Agent
         return $message->content;
     }
 
-    protected function getMessageChunks($message)
+    protected function getMessageChunks($message, $pruning = false)
     {
         $assistantMessages = [];
 
@@ -210,7 +210,7 @@ abstract class Agent
                 $responses = [];
 
                 foreach ($chunk['tools'] as $tool) {
-                    $calls[]     = [
+                    $calls[] = [
                         'id'       => $tool['id'],
                         'type'     => 'function',
                         'function' => [
@@ -218,12 +218,12 @@ abstract class Agent
                             'arguments' => $tool['arguments'],
                         ],
                     ];
-                    $content     = empty($tool['response']) ? '(Canceled)' : (is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']));
+
                     $responses[] = [
                         'tool_call_id' => $tool['id'],
                         'role'         => 'tool',
                         'name'         => $tool['name'],
-                        'content'      => $content,
+                        'content'      => $this->getToolResponse($tool, $pruning),
                     ];
                 }
 
@@ -256,12 +256,18 @@ abstract class Agent
         return $assistantMessages;
     }
 
-    protected function buildHistoryMessages($messages, $maxTokens = 0)
+    protected function getToolResponse($tool, $pruning = false)
+    {
+        return empty($tool['response']) ? '(Canceled)' : (is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']));
+    }
+
+    protected function buildHistoryMessages($messages, $maxTokens = 0, $pruningRound = 0)
     {
         $historyMessages = [];
+        $round           = 1;
 
         foreach ($messages as $message) {
-            $assistantMessages = $this->getMessageChunks($message);
+            $assistantMessages = $this->getMessageChunks($message, $pruningRound > 0 && $round > $pruningRound);
 
             if (empty($assistantMessages)) {
                 continue;
@@ -280,6 +286,7 @@ abstract class Agent
                 }
             }
             $historyMessages = $tempHistoryMessages;
+            ++$round;
         }
 
         return $historyMessages;
