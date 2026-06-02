@@ -38,6 +38,25 @@ abstract class Agent
 
     protected $extraParams = [];
 
+    protected $listener = [];
+
+    public function listen($type, callable $callable)
+    {
+        $this->listener[$type] = $callable;
+        return $this;
+    }
+
+    protected function trigger($type, ...$params)
+    {
+        if (isset($this->listener[$type])) {
+            try {
+                call_user_func($this->listener[$type], ...$params);
+            } catch (Throwable $e) {
+                Log::error("{$e->getMessage()}\n{$e->getTraceAsString()}");
+            }
+        }
+    }
+
     public function run($params, $resume = false)
     {
         try {
@@ -325,6 +344,9 @@ abstract class Agent
 
             foreach ($result as $event) {
                 if (!empty($event['delta']['tool_calls'])) {
+                    if (empty($calls)) {
+                        $this->trigger('content', Arr::get($this->chunks, "{$chunkIndex}.content", ''));
+                    }
                     $call      = $event['delta']['tool_calls'][0];
                     $callIndex = $call['index'] ?? 0;
                     unset($call['index']);
@@ -391,7 +413,9 @@ abstract class Agent
             Log::error("{$e->getMessage()}\n{$e->getTraceAsString()}");
         }
 
-        if (!empty($calls) && $this->iterable) {
+        if (empty($calls)) {
+            $this->trigger('content', Arr::get($this->chunks, "{$chunkIndex}.content", ''));
+        } elseif ($this->iterable) {
             $message = [
                 'role'       => 'assistant',
                 'tool_calls' => $calls,
@@ -460,6 +484,8 @@ abstract class Agent
                     $suspend = true;
                 }
                 yield from $this->processToolResult($result, $messages, $chunkIndex);
+
+                $this->trigger('tool_use', Arr::get($this->chunks, "{$chunkIndex}.tools.{$result['index']}"));
             }
         }
 
