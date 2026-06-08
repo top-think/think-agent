@@ -333,23 +333,6 @@ $this->addFunction('runner', new CodeRunner($client));
 - 沙箱在 CodeRunner 销毁时自动清理
 - 沙箱创建的 Token 消耗会计入总用量
 
-### Util（工具类）
-
-`think\agent\Util` 提供静态工具方法：
-
-```php
-use think\agent\Util;
-
-// Token 计算（兼容 cl100k_base 编码）
-$count = Util::tikToken($messages);   // 消息数组
-$count = Util::tikToken('文本字符串'); // 单个字符串
-
-// 字符串脱敏
-$masked = Util::maskString('sk-1234567890abcdef'); // sk-**********cdef
-
-// 判断是否在 Swoole 协程中
-$inCoroutine = Util::inSwooleCoroutine();
-```
 
 ## 配置项
 

@@ -21,6 +21,7 @@ abstract class Agent
     protected $config = [];
 
     protected $usage = 0;
+    protected $context = 0;
     protected $round = 0;
     protected $chunks = [];
     protected $functions = [];
@@ -76,6 +77,7 @@ abstract class Agent
 
             $this->round     = 0;
             $this->usage     = 0;
+            $this->context   = 0;
             $this->chunks    = [];
             $this->functions = [];
             $this->plugins   = [];
@@ -212,7 +214,7 @@ abstract class Agent
         return $message->content;
     }
 
-    protected function getMessageChunks($message, $pruning = false)
+    protected function getMessageChunks($message)
     {
         $assistantMessages = [];
 
@@ -242,7 +244,7 @@ abstract class Agent
                         'tool_call_id' => $tool['id'],
                         'role'         => 'tool',
                         'name'         => $tool['name'],
-                        'content'      => $this->getToolResponse($tool, $pruning),
+                        'content'      => $this->getToolResponse($tool),
                     ];
                 }
 
@@ -275,18 +277,17 @@ abstract class Agent
         return $assistantMessages;
     }
 
-    protected function getToolResponse($tool, $pruning = false)
+    protected function getToolResponse($tool)
     {
         return empty($tool['response']) ? '(Canceled)' : (is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']));
     }
 
-    protected function buildHistoryMessages($messages, $maxTokens = 0, $pruningRound = 0)
+    protected function buildHistoryMessages($messages)
     {
         $historyMessages = [];
-        $round           = 1;
 
         foreach ($messages as $message) {
-            $assistantMessages = $this->getMessageChunks($message, $pruningRound > 0 && $round > $pruningRound);
+            $assistantMessages = $this->getMessageChunks($message);
 
             if (empty($assistantMessages)) {
                 continue;
@@ -297,15 +298,7 @@ abstract class Agent
                 'content' => $this->getMessageContent($message),
             ];
 
-            $tempHistoryMessages = array_merge([$userMessage, ...$assistantMessages], $historyMessages);
-            if ($maxTokens > 0) {
-                $tokens = Util::tikToken($tempHistoryMessages);
-                if ($tokens > $maxTokens * .6) {
-                    break;
-                }
-            }
-            $historyMessages = $tempHistoryMessages;
-            ++$round;
+            $historyMessages = array_merge([$userMessage, ...$assistantMessages], $historyMessages);
         }
 
         return $historyMessages;
@@ -317,17 +310,13 @@ abstract class Agent
 
     protected function iteration($messages)
     {
-        $model       = Arr::get($this->config['model'], 'name');
-        $thinking    = Arr::get($this->config['model'], 'thinking', 'enabled');
-        $temperature = Arr::get($this->config['model'], 'params.temperature', 0.8);
-        $user        = $this->config['user'] ?? null;
+        $model    = Arr::get($this->config['model'], 'name');
+        $thinking = Arr::get($this->config['model'], 'thinking', 'enabled');
 
         $params = [
-            'model'       => $model,
-            'messages'    => $messages,
-            'thinking'    => $thinking,
-            'temperature' => $temperature,
-            'user'        => $user,
+            'model'    => $model,
+            'messages' => $messages,
+            'thinking' => $thinking,
             ...$this->extraParams,
         ];
 
@@ -403,8 +392,8 @@ abstract class Agent
                 }
 
                 if (!empty($event['usage'])) {
-                    $this->usage += $event['usage']['total_tokens'];
-
+                    $this->usage   += $event['usage']['total_tokens'];
+                    $this->context = $event['usage']['context_tokens'] ?? 0;
                     yield from $this->sendChunkData($chunkIndex, 'content', '', true);
                 }
             }

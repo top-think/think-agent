@@ -2,23 +2,8 @@
 
 namespace think\agent;
 
-use Closure;
-use Swoole\Coroutine;
-use think\agent\tiktoken\Encoder;
-
 final class Util
 {
-    private static ?Encoder $encoder = null;
-
-    public static function inSwooleCoroutine(): bool
-    {
-        return \extension_loaded('swoole') && method_exists(Coroutine::class, 'getCid') && -1 !== Coroutine::getCid();
-    }
-
-    public static function toBytes(string $text): array
-    {
-        return array_map(Closure::fromCallable('hexdec'), str_split(bin2hex($text), 2));
-    }
 
     public static function substrReplace($string, $replacement, $start, $length = null)
     {
@@ -50,8 +35,8 @@ final class Util
             // Recursive call
             return array_map(__FUNCTION__, $string, $replacement, $start, $length);
         }
-        preg_match_all('/./us', (string) $string, $smatches);
-        preg_match_all('/./us', (string) $replacement, $rmatches);
+        preg_match_all('/./us', (string)$string, $smatches);
+        preg_match_all('/./us', (string)$replacement, $rmatches);
         if (null === $length) {
             $length = mb_strlen($string);
         }
@@ -60,10 +45,6 @@ final class Util
         return join($smatches[0]);
     }
 
-    public static function fromBytes(array $bytes): string
-    {
-        return pack('C*', ...$bytes);
-    }
 
     public static function maskString($string)
     {
@@ -78,71 +59,88 @@ final class Util
         return self::substrReplace($string, str_repeat('*', $length), $start, $length);
     }
 
-    public static function tikToken($messages)
+    public static function tikTokens($messages)
     {
-        $perMessage = 3;
-        $perName    = 1;
-
-        if (null === self::$encoder) {
-            self::$encoder = new Encoder();
-        }
-
-        $encoder = self::$encoder;
-
         if (is_string($messages)) {
-            return count($encoder->encode($messages));
+            return (int)ceil(mb_strlen($messages) / 4);
         }
 
         $nums = 0;
 
         foreach ($messages as $message) {
-            $nums += $perMessage;
-            foreach ($message as $key => $value) {
-                if ('tool_calls' == $key) {
-                    foreach ($value as $call) {
-                        foreach ($call as $cKey => $cValue) {
-                            $nums += count($encoder->encode($cKey));
-                            if ('function' == $cKey) {
-                                foreach ($cValue as $fKey => $fValue) {
-                                    $nums += count($encoder->encode($fKey));
-                                    $nums += count($encoder->encode($fValue));
-                                }
-                            } else {
-                                $nums += count($encoder->encode($cValue));
-                            }
-                        }
-                    }
-                } else {
-                    if (is_array($value)) {
-                        $text = '';
-                        foreach ($value as $v) {
-                            if (is_array($v)) {
-                                switch ($v['type']) {
-                                    case 'text':
-                                        $text .= $v['text'];
-                                        break;
-                                    case 'image_url':
-                                        $detail = $v['image_url']['detail'] ?? 'high';
-                                        $nums += 'low' == $detail ? 85 : 1000;
-                                        break;
-                                }
-                            }
-                        }
-                        $value = $text;
-                    }
-                    if (is_string($value)) {
-                        $nums += count($encoder->encode($value));
-                    }
-                }
+            $nums += self::estimateTokens($message);
+        }
 
-                if ('name' == $key) {
-                    $nums += $perName;
+        return $nums;
+    }
+
+    /**
+     * Estimate token count for one message using a conservative character heuristic.
+     * Approximates 1 token per 4 characters.
+     */
+    protected static function estimateTokens($message)
+    {
+        $chars = 0;
+        $role  = $message['role'] ?? '';
+
+        switch ($role) {
+            case 'system':
+            case 'user':
+            {
+                $content = $message['content'] ?? '';
+                if (is_string($content)) {
+                    $chars = mb_strlen($content);
+                } elseif (is_array($content)) {
+                    foreach ($content as $block) {
+                        if (is_array($block)) {
+                            switch ($block['type'] ?? null) {
+                                case 'text':
+                                    $chars += mb_strlen($block['text'] ?? '');
+                                    break;
+                                case 'image_url':
+                                    $chars += 4800;
+                                    break;
+                            }
+                        }
+                    }
                 }
+                return (int)ceil($chars / 4);
+            }
+            case 'assistant':
+            {
+                $content = $message['content'] ?? '';
+                if (is_string($content)) {
+                    $chars += mb_strlen($content);
+                }
+                // reasoning (thinking) content
+                if (isset($message['reasoning'])) {
+                    $chars += mb_strlen($message['reasoning']);
+                }
+                // tool calls
+                if (!empty($message['tool_calls'])) {
+                    foreach ($message['tool_calls'] as $call) {
+                        $callType = $call['type'] ?? 'function';
+                        if ($callType === 'function' && isset($call['function'])) {
+                            $chars += mb_strlen($call['function']['name'] ?? '');
+                            $chars += mb_strlen($call['function']['arguments'] ?? '');
+                        } else {
+                            // plugin / mcp etc.
+                            if (isset($call[$callType])) {
+                                $chars += mb_strlen($call[$callType]['function'] ?? '');
+                                $chars += mb_strlen($call[$callType]['arguments'] ?? '');
+                            }
+                        }
+                    }
+                }
+                return (int)ceil($chars / 4);
+            }
+            case 'tool':
+            {
+                $chars = mb_strlen($message['content'] ?? '');
+                return (int)ceil($chars / 4);
             }
         }
 
-        $nums += 3;
-
-        return $nums;
+        return 0;
     }
 }
