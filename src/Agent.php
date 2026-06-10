@@ -65,15 +65,16 @@ abstract class Agent
             $this->init($params);
             $this->buildTools();
 
-            yield from $this->handleCallback($this->start($params));
+            yield from $this->delegate($this->start($params));
 
-            $messages = $this->buildPromptMessages();
+            $messages = yield from $this->delegate($this->buildPromptMessages());
+
             yield from $this->iteration($messages);
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
             Log::error("{$e->getMessage()}\n{$e->getTraceAsString()}");
         } finally {
-            yield from $this->handleCallback($this->complete());
+            yield from $this->delegate($this->complete());
 
             $this->round     = 0;
             $this->usage     = 0;
@@ -97,11 +98,13 @@ abstract class Agent
      *
      * @return Generator
      */
-    protected function handleCallback($result)
+    protected function delegate($result)
     {
         if ($result instanceof Generator) {
-            yield from $result;
+            return yield from $result;
         }
+
+        return $result;
     }
 
     protected function start($params)
