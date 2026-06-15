@@ -20,6 +20,7 @@ abstract class Agent
 {
     protected $config = [];
 
+    protected $start = 0;
     protected $usage = 0;
     protected $context = 0;
     protected $round = 0;
@@ -61,6 +62,7 @@ abstract class Agent
     public function run($params, $resume = false)
     {
         try {
+            $this->start    = microtime(true);
             $this->isResume = $resume;
             $this->init($params);
             $this->buildTools();
@@ -77,6 +79,7 @@ abstract class Agent
             yield from $this->delegate($this->complete());
 
             $this->round     = 0;
+            $this->start     = 0;
             $this->usage     = 0;
             $this->context   = 0;
             $this->chunks    = [];
@@ -208,6 +211,11 @@ abstract class Agent
         }
 
         return $prompt;
+    }
+
+    protected function getLatency()
+    {
+        return round((microtime(true) - $this->start) * 1000);
     }
 
     abstract protected function buildPromptMessages();
