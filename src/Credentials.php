@@ -64,9 +64,18 @@ class Credentials implements JsonSerializable
 
     public function jsonSerialize(): mixed
     {
-        return array_map(function ($value) {
+        return $this->toArray();
+    }
+
+    public function toArray($mask = true): array
+    {
+        return array_map(function ($value) use ($mask) {
             if (str_starts_with($value, '@encrypted:')) {
-                return Util::maskString($this->decrypt($value));
+                $data = $this->decrypt($value);
+                if ($mask) {
+                    return Util::maskString($data);
+                }
+                return $data;
             }
 
             return $value;
