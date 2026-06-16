@@ -296,7 +296,7 @@ abstract class Agent
         return empty($tool['response']) ? '(Canceled)' : (is_string($tool['response']) ? $tool['response'] : json_encode($tool['response']));
     }
 
-    protected function buildHistoryMessages($messages)
+    protected function buildHistoryMessages($messages, $maxTokens = 0)
     {
         $historyMessages = [];
 
@@ -312,7 +312,14 @@ abstract class Agent
                 'content' => $this->getMessageContent($message),
             ];
 
-            $historyMessages = array_merge([$userMessage, ...$assistantMessages], $historyMessages);
+            $tempHistoryMessages = array_merge([$userMessage, ...$assistantMessages], $historyMessages);
+            if ($maxTokens > 0) {
+                $tokens = Util::tikTokens($tempHistoryMessages);
+                if ($tokens > $maxTokens) {
+                    break;
+                }
+            }
+            $historyMessages = $tempHistoryMessages;
         }
 
         return $historyMessages;
