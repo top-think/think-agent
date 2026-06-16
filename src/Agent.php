@@ -22,7 +22,7 @@ abstract class Agent
 
     protected $start = 0;
     protected $usage = 0;
-    protected $context = 0;
+    protected $occupied = 0;
     protected $round = 0;
     protected $chunks = [];
     protected $functions = [];
@@ -81,7 +81,7 @@ abstract class Agent
             $this->round     = 0;
             $this->start     = 0;
             $this->usage     = 0;
-            $this->context   = 0;
+            $this->occupied = 0;
             $this->chunks    = [];
             $this->functions = [];
             $this->plugins   = [];
@@ -404,7 +404,7 @@ abstract class Agent
 
                 if (!empty($event['usage'])) {
                     $this->usage   += $event['usage']['total_tokens'];
-                    $this->context = $event['usage']['context_tokens'] ?? 0;
+                    $this->occupied = $event['usage']['context_tokens'] ?? 0;
                     yield from $this->sendChunkData($chunkIndex, 'content', '', true);
                 }
             }
