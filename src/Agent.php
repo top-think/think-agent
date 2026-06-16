@@ -65,13 +65,15 @@ abstract class Agent
             $this->start    = microtime(true);
             $this->isResume = $resume;
             $this->init($params);
-            $this->buildTools();
 
             yield from $this->delegate($this->start($params));
 
-            $messages = yield from $this->delegate($this->buildPromptMessages());
+            if ($this->iterable) {
+                $this->buildTools();
+                $messages = yield from $this->delegate($this->buildPromptMessages());
 
-            yield from $this->iteration($messages);
+                yield from $this->iteration($messages);
+            }
         } catch (Throwable $e) {
             yield from $this->sendChunkData($this->round, 'error', $e->getMessage());
             Log::error("{$e->getMessage()}\n{$e->getTraceAsString()}");
@@ -81,7 +83,8 @@ abstract class Agent
             $this->round     = 0;
             $this->start     = 0;
             $this->usage     = 0;
-            $this->occupied = 0;
+            $this->occupied  = 0;
+            $this->iterable  = true;
             $this->chunks    = [];
             $this->functions = [];
             $this->plugins   = [];
@@ -403,7 +406,7 @@ abstract class Agent
                 }
 
                 if (!empty($event['usage'])) {
-                    $this->usage   += $event['usage']['total_tokens'];
+                    $this->usage    += $event['usage']['total_tokens'];
                     $this->occupied = $event['usage']['context_tokens'] ?? 0;
                     yield from $this->sendChunkData($chunkIndex, 'content', '', true);
                 }
