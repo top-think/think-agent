@@ -245,12 +245,15 @@ abstract class Agent
                 $responses = [];
 
                 foreach ($chunk['tools'] as $tool) {
+                    if (empty($tool['id']) || empty($tool['name'])) {
+                        continue;
+                    }
                     $calls[] = [
                         'id'       => $tool['id'],
                         'type'     => 'function',
                         'function' => [
                             'name'      => $tool['name'],
-                            'arguments' => $tool['arguments'],
+                            'arguments' => $tool['arguments'] ?? '{}',
                         ],
                     ];
 
