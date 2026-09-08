@@ -2,6 +2,7 @@
 
 namespace think\agent;
 
+use Closure;
 use Generator;
 use Swoole\Coroutine\Channel;
 use think\agent\tool\FunctionCall;
@@ -42,17 +43,28 @@ abstract class Agent
 
     protected $listener = [];
 
-    public function listen($type, callable $callable)
+    public function listen($type, callable $callable): Closure
     {
-        $this->listener[$type] = $callable;
-        return $this;
+        $id = uniqid('', true);
+        $this->listener[$type][$id] = $callable;
+
+        $unlisten = function () use ($type, $id) {
+            unset($this->listener[$type][$id]);
+        };
+
+        // stop is a state event. Subscribe late and still receive it.
+        if ('stop' === $type && $this->stopped) {
+            $callable();
+        }
+
+        return $unlisten;
     }
 
     protected function trigger($type, ...$params)
     {
-        if (isset($this->listener[$type])) {
+        foreach ($this->listener[$type] ?? [] as $callable) {
             try {
-                call_user_func($this->listener[$type], ...$params);
+                call_user_func($callable, ...$params);
             } catch (Throwable $e) {
                 Log::error("{$e->getMessage()}\n{$e->getTraceAsString()}");
             }
@@ -93,8 +105,14 @@ abstract class Agent
 
     public function stop()
     {
+        if ($this->stopped) {
+            return;
+        }
+
         $this->iterable = false;
         $this->stopped  = true;
+
+        $this->trigger('stop');
     }
 
     /**
