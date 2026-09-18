@@ -102,6 +102,26 @@ foreach ($agent->run(['input' => '你好']) as $chunk) {
 
 ## 核心架构
 
+### 沙箱 WebSocket
+
+`Sandbox` 初始化时可以选择 HTTP 或 WebSocket 传输模式。创建沙箱本身始终通过 HTTP 完成，创建后文件读取、文件写入和命令执行可以通过 WebSocket 长连接完成：
+
+```php
+$sandbox = new Sandbox('my-sandbox', [
+    'mode' => 'ws',
+]);
+
+foreach ($sandbox->runCommand('php app.php') as $event) {
+    // $event['type']: stdout、stderr 或 exit
+}
+
+foreach ($sandbox->watchFiles('/workspace', 'watch-1') as $event) {
+    // watching 或 file_change
+}
+```
+
+WebSocket 模式的连接和调用必须运行在 Swoole 协程中。文件上传、下载和删除会继续使用 HTTP，避免通过 WebSocket 传输大文件。
+
 ### Agent（智能体基类）
 
 `think\agent\Agent` 是框架核心，负责：
