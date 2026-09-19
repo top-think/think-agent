@@ -18,8 +18,9 @@ class WebSocketClient extends Client
     public function __construct(
         protected string $apiUrl,
         protected string $sandboxId,
-        protected array $options = [],
-    ) {
+        protected array  $options = [],
+    )
+    {
         if ($this->sandboxId === '') throw new \InvalidArgumentException('Sandbox ID is required');
 
         $this->sendLock = new \Swoole\Coroutine\Channel(1);
@@ -66,7 +67,7 @@ class WebSocketClient extends Client
 
     public function executeCommandStream(string $command, ?string $workdir = null, array $env = []): Generator
     {
-        $id = $this->id();
+        $id      = $this->id();
         $channel = $this->register($id);
         $message = ['id' => $id, 'type' => 'exec', 'command' => $command];
         if ($workdir !== null) $message['workdir'] = $workdir;
@@ -84,13 +85,13 @@ class WebSocketClient extends Client
 
     public function watchFiles(?string $path = null, ?string $id = null): Generator
     {
-        $id ??= $this->id();
-        $reconnects = 0;
+        $id            ??= $this->id();
+        $reconnects    = 0;
         $maxReconnects = 5;
 
         while (true) {
             $channel = $this->register($id);
-            $retry = false;
+            $retry   = false;
 
             try {
                 $this->send(['id' => $id, 'type' => 'watch', 'path' => $path]);
@@ -128,15 +129,15 @@ class WebSocketClient extends Client
         $url = parse_url($this->apiUrl);
         if (!$url || empty($url['host'])) throw new RuntimeException('Invalid sandbox API URL');
 
-        $ssl = ($url['scheme'] ?? 'http') === 'https';
-        $port = $url['port'] ?? ($ssl ? 443 : 80);
+        $ssl      = ($url['scheme'] ?? 'http') === 'https';
+        $port     = $url['port'] ?? ($ssl ? 443 : 80);
         $basePath = rtrim($url['path'] ?? '', '/');
-        $prefix = preg_match('#/api/v1$#i', $basePath) ? $basePath : $basePath . '/api/v1';
-        $path = $prefix . '/sandboxes/' . $this->sandboxId . '/ws';
+        $prefix   = preg_match('#/api/v1$#i', $basePath) ? $basePath : $basePath . '/api/v1';
+        $path     = $prefix . '/sandboxes/' . $this->sandboxId . '/ws';
 
         $this->connection = new \Swoole\Coroutine\Http\Client($url['host'], $port, $ssl);
         $this->connection->set(array_merge([
-            'timeout' => 300,
+            'timeout'         => -1,
             'ssl_verify_peer' => false,
             'ssl_verify_host' => false,
         ], $this->options));
@@ -188,7 +189,7 @@ class WebSocketClient extends Client
             return null;
         }
 
-        $frame = $this->connection->recv();
+        $frame = $this->connection->recv(-1);
         if ($frame === false || $frame === null) {
             return null;
         }
@@ -214,7 +215,7 @@ class WebSocketClient extends Client
 
     protected function request(string $type, array $data = []): array
     {
-        $id = $this->id();
+        $id      = $this->id();
         $channel = $this->register($id);
 
         try {
@@ -248,7 +249,7 @@ class WebSocketClient extends Client
             throw new RuntimeException('WebSocket request ID is already in use: ' . $id);
         }
 
-        $channel = new \Swoole\Coroutine\Channel(100);
+        $channel             = new \Swoole\Coroutine\Channel(100);
         $this->requests[$id] = $channel;
         return $channel;
     }
@@ -299,8 +300,8 @@ class WebSocketClient extends Client
     protected function failPending(\Throwable $exception): void
     {
         $this->connected = false;
-        $message = [
-            'type' => 'error',
+        $message         = [
+            'type'  => 'error',
             'error' => $exception->getMessage() ?: 'Sandbox WebSocket connection failed',
         ];
 
@@ -319,7 +320,7 @@ class WebSocketClient extends Client
 
         $this->connection?->close();
         $this->connection = null;
-        $this->connected = false;
+        $this->connected  = false;
 
         \Swoole\Coroutine::sleep(min(1 << ($attempt - 1), 5));
     }
