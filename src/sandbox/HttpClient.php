@@ -47,7 +47,7 @@ class HttpClient extends Client
     {
         $data = ['command' => $command];
         if ($workdir !== null) $data['workdir'] = $workdir;
-        if ($env) $data['env'] = $env;
+        if ($env) $data['env'] = $this->normalizeEnv($env);
         $response = $this->request->post("sandboxes/{$this->sandboxId}/process/execute", $data);
 
         return [
@@ -61,7 +61,7 @@ class HttpClient extends Client
     {
         $data = ['command' => $command, 'stream' => true];
         if ($workdir !== null) $data['workdir'] = $workdir;
-        if ($env) $data['env'] = $env;
+        if ($env) $data['env'] = $this->normalizeEnv($env);
         $stream = $this->request->rawRequest('POST', "sandboxes/{$this->sandboxId}/process/execute", [
             'json' => $data, 'stream' => true,
         ])->getBody();

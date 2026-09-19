@@ -21,4 +21,12 @@ abstract class Client
     abstract public function executeCommandStream(string $command, ?string $workdir = null, array $env = []): Generator;
     abstract public function browserExecute(array $data): array;
     abstract public function watchFiles(?string $path = null, ?string $id = null): Generator;
+
+    /**
+     * 环境变量值统一转为字符串，保证符合接口要求
+     */
+    protected function normalizeEnv(array $env): array
+    {
+        return array_map('strval', $env);
+    }
 }

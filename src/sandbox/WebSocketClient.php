@@ -70,7 +70,7 @@ class WebSocketClient extends Client
         $channel = $this->register($id);
         $message = ['id' => $id, 'type' => 'exec', 'command' => $command];
         if ($workdir !== null) $message['workdir'] = $workdir;
-        if ($env) $message['env'] = $env;
+        if ($env) $message['env'] = $this->normalizeEnv($env);
 
         try {
             $this->send($message);
