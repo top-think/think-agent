@@ -111,11 +111,14 @@ class Sandbox
         ])->getBody();
     }
 
-    public function runCommand($command, $stream = false)
+    public function runCommand($command, $stream = false, $workDir = null, $env = null)
     {
+        $workDir ??= $this->workDir;
+        $env       = array_merge($this->env, $env ?? []);
+
         return $stream
-            ? $this->client()->executeCommandStream($command, $this->workDir, $this->env)
-            : $this->client()->executeCommand($command, $this->workDir, $this->env);
+            ? $this->client()->executeCommandStream($command, $workDir, $env)
+            : $this->client()->executeCommand($command, $workDir, $env);
     }
 
     public function browserExecute(array $data): array
