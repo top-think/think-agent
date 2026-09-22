@@ -14,7 +14,7 @@
         "topthink/think-ai": "*",
         "topthink/framework": ">=6.0",
         "cebe/php-openapi": "^1.7",
-        "topthink/think-swoole": "^4.2"
+        "topthink/think-swoole": "^4.0"
     },
     "prefer-stable": true,
     "minimum-stability": "dev",
