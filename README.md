@@ -150,6 +150,143 @@ WebSocket 模式的连接和调用必须运行在 Swoole 协程中。文件上�
 | `$canUseTool` | 是否允许工具调用 |
 | `$extraParams` | 附加的模型请求参数 |
 
+### Harness（智能体运行基类）
+
+`think\agent\Harness` 继承自 `Agent`，为“chat 式”智能体提供一套可复用的运行框架：
+
+- **会话生命周期**：会话解析、消息创建/恢复、状态与 chunks 持久化（钩子对接任意存储）
+- **上下文管理**：配合 `ContextManager` trait 实现工具响应裁剪（prune）与上下文压缩（compact）
+- **子智能体调用**：配合 `SubAgent` 基类与 `AgentRun` 工具实现主/子智能体协作
+- **打断与恢复**：`stop()` 主动中断、`Suspend` 挂起、`run($params, true)` 恢复执行
+
+使用方只需实现少量钩子方法即可接入任意持久化方案：
+
+```php
+use think\agent\Harness;
+use think\agent\harness\ContextManager;
+
+class ChatAgent extends Harness
+{
+    use ContextManager; // 启用上下文压缩 + 工具响应裁剪
+
+    protected function checkConfig($params)
+    {
+        $this->config = [
+            'model' => [
+                'name'   => 'gpt-4o',
+                'params' => [
+                    'history_round'  => -1,
+                    'context_tokens' => $this->getModelContext('gpt-4o'),
+                ],
+            ],
+        ];
+    }
+
+    protected function resolveSession($params)
+    {
+        return Conversation::findOrFail($params['conversation']);
+    }
+
+    protected function createMessage($params)
+    {
+        return $this->session->messages()->save([
+            'query'  => $params['query'] ?? '',
+            'status' => static::STATUS_RUNNING,
+        ]);
+    }
+
+    protected function resumeMessage($params)
+    {
+        return $params['message'] ?? $this->session->messages()->order('id desc')->findOrFail();
+    }
+
+    protected function getHistoryMessages($round)
+    {
+        return $this->session->messages()->order('id desc')->select();
+    }
+
+    protected function getSystemPrompt(): string
+    {
+        return '你是一个智能助手。';
+    }
+
+    protected function saveMessage(array $data): void
+    {
+        $this->message->save($data);
+    }
+}
+```
+
+运行与恢复：
+
+```php
+$agent = new ChatAgent();
+
+// 首次运行
+foreach ($agent->run(['conversation' => 1, 'query' => '你好']) as $event) {
+    // $event: ['session' => ...]、['id' => ...]、['chunks' => ...]、['stats' => ...]、['suspend' => true]
+}
+
+// 恢复挂起的工具（Suspend）：写回用户数据并继续迭代
+foreach ($agent->run([
+    'conversation' => 1,
+    'chunk'        => 0,     // 挂起工具所在轮次索引
+    'tool'         => 0,     // 工具在轮次内的索引
+    'payload'      => 'ok',  // 用户提交的数据
+], true) as $event) {
+}
+```
+
+中断机制：
+
+- **主动中断**：调用 `stop()`（或由子类在 `startStopWatcher()` 中监听外部信号后调用），保存 chunks 与 `canceled` 状态
+- **消费端断开**：`run()` 返回的生成器检测到 `yield` 返回 `false` 时自动调用 `stop()`
+- **挂起**：工具返回 `Suspend` 结果时下发 `['suspend' => true]` 事件并结束本轮，等待携带 `chunk/tool/payload` 的恢复运行
+- **崩溃恢复**：消息状态仍为运行时，可直接以 `resume` 模式重新拉起，从消息 chunks 重建上下文并继续迭代
+
+### SubAgent（子智能体基类）
+
+`think\agent\harness\SubAgent` 继承自 `Harness`，用于实现被主智能体委派的子智能体：
+
+```php
+use think\agent\harness\SubAgent;
+
+class AnalystAgent extends SubAgent
+{
+    protected function getHistoryMessages($round)
+    {
+        // 按 identifier 隔离子智能体上下文
+        return $this->session->messages()
+            ->where('agent_identifier', $this->getIdentifier())
+            ->order('id', 'desc')
+            ->select();
+    }
+}
+```
+
+主智能体通过 `AgentRun` 工具调用子智能体，由工厂回调决定子智能体的装配（返回 `null` 表示目标不存在）：
+
+```php
+use think\agent\harness\tool\AgentRun;
+
+$this->addFunction('agent_run', new AgentRun(
+    function ($identifier, $query, $files) {
+        $config = $this->conversation->agents[$identifier] ?? null;
+        if (!$config) {
+            return null;
+        }
+
+        return new AnalystAgent($identifier, [
+            'prompt'  => $config['prompt'],
+            'workDir' => $this->getWorkDir(),
+        ]);
+    },
+    $this,
+));
+```
+
+子智能体运行过程中的所有事件会转发到当前事件流，最终以执行报告（文本结果 + 元数据 + 用量）返回给主智能体；主智能体中断时会级联停止子智能体。
+
 ### Plugin（插件基类）
 
 `think\agent\Plugin` 是插件系统的抽象基类：

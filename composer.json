@@ -9,17 +9,23 @@
     ],
     "require": {
         "php": ">=8.2",
-        "ext-swoole": "^4.0|^5.0|^6.0",
+        "ext-swoole": "*",
         "topthink/think-helper": "^3.1",
         "topthink/think-ai": "*",
         "topthink/framework": ">=6.0",
-        "cebe/php-openapi": "^1.7"
+        "cebe/php-openapi": "^1.7",
+        "topthink/think-swoole": "^4.2"
     },
     "prefer-stable": true,
     "minimum-stability": "dev",
     "autoload": {
         "psr-4": {
             "think\\agent\\": "src"
+        }
+    },
+    "config": {
+        "platform": {
+            "ext-swoole": "6"
         }
     },
     "require-dev": {
