@@ -232,6 +232,30 @@ class Sandbox
     }
 
     /**
+     * 关闭底层连接（仅 ws 模式有实际动作，http 模式无影响）
+     *
+     * ws 模式下关闭长连接并等待读协程退出；关闭后实例仍可继续使用，
+     * 下次调用会自动重连同一沙箱。实例不再使用时无需手动调用，
+     * 对象析构时会自动关闭。
+     */
+    public function close(): void
+    {
+        $this->client?->close();
+    }
+
+    /**
+     * 对象析构时自动关闭连接（兜底，避免临时创建的实例泄漏长连接）
+     */
+    public function __destruct()
+    {
+        try {
+            $this->client?->close();
+        } catch (\Throwable $e) {
+            // 析构可能发生在非协程上下文（如进程退出阶段），忽略关闭异常
+        }
+    }
+
+    /**
      * 获取沙箱 ID，首次调用时自动创建沙箱
      */
     public function getId(): string

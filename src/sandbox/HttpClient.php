@@ -91,4 +91,9 @@ class HttpClient extends Client
         throw new \LogicException('File watching requires ws mode');
     }
 
+    public function close(): void
+    {
+        // HTTP 传输基于同步短连接，无需显式释放
+    }
+
 }

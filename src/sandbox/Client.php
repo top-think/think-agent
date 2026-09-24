@@ -118,6 +118,15 @@ abstract class Client
     abstract public function watchFiles(?string $path = null, ?string $id = null): Generator;
 
     /**
+     * 关闭底层连接并释放资源
+     *
+     * WebSocket 传输会关闭长连接、结束读协程并关闭所有进行中的请求通道；
+     * HTTP 传输基于同步短连接，无实际动作。关闭后实例仍可继续使用，
+     * 下次调用会自动建立新连接。
+     */
+    abstract public function close(): void;
+
+    /**
      * 环境变量值统一转为字符串，保证符合接口要求
      */
     protected function normalizeEnv(array $env): array

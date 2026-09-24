@@ -163,6 +163,14 @@ class WebSocketClient extends Client
             $channel->close();
         }
         $this->requests = [];
+
+        // 等待读协程退出（close 后立即复用实例时，避免其残留判断影响新连接）；
+        // 非协程上下文（如进程退出阶段的析构）跳过等待
+        if (\Swoole\Coroutine::getCid() > 0) {
+            while ($this->readerStarted) {
+                \Swoole\Coroutine::sleep(0.001);
+            }
+        }
     }
 
     protected function send(array $message): void
