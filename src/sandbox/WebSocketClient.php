@@ -189,8 +189,10 @@ class WebSocketClient extends Client
             return null;
         }
 
+        // Swoole 6.1 起：服务端关闭连接时 recv() 返回空字符串，false 表示失败/超时；
+        // ping/pong/close 控制帧也由 Swoole 内部自动处理，不会返回给调用方
         $frame = $this->connection->recv(-1);
-        if ($frame === false || $frame === null) {
+        if ($frame === false || $frame === null || $frame === '') {
             return null;
         }
 
@@ -203,14 +205,40 @@ class WebSocketClient extends Client
 
     protected function receive(): ?array
     {
-        $frame = $this->receiveFrame();
-        if (!$frame || $frame->opcode !== 1) return null;
+        while (($frame = $this->receiveFrame()) !== null) {
+            // 旧版 Swoole（< 6.1）会把控制帧交给业务层，需手动应答 PING 维持服务端心跳
+            if ($frame->opcode === SWOOLE_WEBSOCKET_OPCODE_PING) {
+                $this->sendPong($frame->data);
+                continue;
+            }
 
-        $data = $frame->data;
-        if (!$data) return null;
-        $message = json_decode($data, true);
-        if (!is_array($message)) throw new RuntimeException('Invalid sandbox WebSocket response');
-        return $message;
+            // 协议消息均为 JSON 文本帧，跳过其它类型帧和空帧，不视为连接断开
+            if ($frame->opcode !== SWOOLE_WEBSOCKET_OPCODE_TEXT || !$frame->data) {
+                continue;
+            }
+
+            $message = json_decode($frame->data, true);
+            if (!is_array($message)) throw new RuntimeException('Invalid sandbox WebSocket response');
+            return $message;
+        }
+
+        return null;
+    }
+
+    /**
+     * 应答服务端 PING（仅旧版 Swoole 需要，6.1 起控制帧由扩展自动处理）
+     *
+     * 沿用发送锁，避免与请求消息并发写坏 WebSocket 流
+     */
+    protected function sendPong(string $payload): void
+    {
+        $this->sendLock->pop();
+
+        try {
+            $this->connection?->push($payload, SWOOLE_WEBSOCKET_OPCODE_PONG);
+        } finally {
+            $this->sendLock->push(true);
+        }
     }
 
     protected function request(string $type, array $data = []): array
