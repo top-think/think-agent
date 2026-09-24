@@ -32,12 +32,12 @@ class WebSocketClient extends Client
         return $this->request('list', ['path' => $path])['data'] ?? [];
     }
 
-    public function readTextFile(string $path, int $offset = 0, int $limit = -1): string
+    public function readFile(string $path, int $offset = 0, int $limit = -1): string
     {
         return $this->request('read', compact('path', 'offset', 'limit'))['data']['content'] ?? '';
     }
 
-    public function writeTextFile(string $path, string $content): void
+    public function writeFile(string $path, string $content): void
     {
         $this->request('write', compact('path', 'content'));
     }

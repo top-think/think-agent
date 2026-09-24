@@ -20,13 +20,13 @@ class HttpClient extends Client
         return $response['data'] ?? [];
     }
 
-    public function readTextFile(string $path, int $offset = 0, int $limit = -1): string
+    public function readFile(string $path, int $offset = 0, int $limit = -1): string
     {
         $response = $this->request->get("sandboxes/{$this->sandboxId}/files/read", compact('path', 'offset', 'limit'));
         return $response['data']['content'] ?? '';
     }
 
-    public function writeTextFile(string $path, string $content): void
+    public function writeFile(string $path, string $content): void
     {
         $this->request->post("sandboxes/{$this->sandboxId}/files/write", compact('path', 'content'));
     }
