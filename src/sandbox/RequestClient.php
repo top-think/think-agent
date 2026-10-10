@@ -17,13 +17,13 @@ class RequestClient
 
     public function __construct(protected string $apiUrl, array $options = [])
     {
-        $baseUrl = rtrim($apiUrl, '/');
+        $baseUrl       = rtrim($apiUrl, '/');
         $this->baseUrl = preg_match('#/api/v1$#i', $baseUrl) ? $baseUrl . '/' : $baseUrl . '/api/v1/';
-        $this->http = new \GuzzleHttp\Client(array_replace([
-            'timeout'     => 300,
-            'verify'      => false,
-            'http_errors' => true,
-            'headers'     => ['Accept' => 'application/json'],
+        $this->http    = new \GuzzleHttp\Client(array_replace([
+            'read_timeout' => 300,
+            'verify'       => false,
+            'http_errors'  => true,
+            'headers'      => ['Accept' => 'application/json'],
         ], $options));
     }
 
@@ -49,13 +49,13 @@ class RequestClient
     {
         try {
             $response = $this->http->request($method, $this->url($uri), $options);
-            $data = $this->decode($response);
+            $data     = $this->decode($response);
         } catch (RequestException $e) {
             throw $this->requestException($e);
         }
 
         $code = $data['code'] ?? $response->getStatusCode();
-        if (!is_numeric($code) || (int) $code < 200 || (int) $code >= 300) {
+        if (!is_numeric($code) || (int)$code < 200 || (int)$code >= 300) {
             throw new Exception($data['message'] ?? ('Sandbox API request failed with status ' . $code));
         }
 
@@ -78,7 +78,7 @@ class RequestClient
 
     protected function decode(ResponseInterface $response): array
     {
-        $body = (string) $response->getBody();
+        $body = (string)$response->getBody();
         if ($body === '') throw new Exception('Sandbox API returned an empty response');
 
         try {
