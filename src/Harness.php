@@ -120,6 +120,9 @@ abstract class Harness extends Agent
 
     abstract protected function checkConfig($params);
 
+    /**
+     * 过滤附件列表（默认仅保留 name、path、size 齐全的项），供子类创建消息时使用
+     */
     protected function checkFiles($files)
     {
         return array_filter($files, function ($file) {
@@ -135,6 +138,11 @@ abstract class Harness extends Agent
     abstract protected function getSystemPrompt();
 
     abstract protected function getHistoryMessages($round);
+
+    /**
+     * 工作目录，文件类内容的相对路径基准
+     */
+    abstract protected function getWorkDir();
 
     protected function buildPromptMessages()
     {
@@ -187,34 +195,66 @@ abstract class Harness extends Agent
             ];
         }
 
-        if (!empty($message->query)) {
+        $input = $this->getMessageInput($message);
+
+        if (!empty($input['query'])) {
             $content[] = [
                 'type' => 'text',
-                'text' => $message->query,
+                'text' => $input['query'],
             ];
         }
-        if (!empty($message->quote)) {
+        if (!empty($input['quote'])) {
             $content[] = [
                 'type' => 'text',
-                'text' => "<quote>{$message->quote}</quote>",
+                'text' => "<quote>{$input['quote']}</quote>",
             ];
         }
 
-        if (!empty($message->files)) {
-            $files = json_encode(array_map(function ($file) {
-                return [
-                    'name' => $file['name'],
-                    'path' => "{$this->getWorkDir()}/{$file['name']}",
-                ];
-            }, $message->files), JSON_UNESCAPED_UNICODE);
-
-            $content[] = [
-                'type' => 'text',
-                'text' => "<files>{$files}</files>",
-            ];
+        if (!empty($input['files'])) {
+            $content[] = $this->buildFilesContent($input['files']);
         }
 
         return $content;
+    }
+
+    /**
+     * 从消息中读取用户输入，子类可重写以适配实际的存储结构
+     *
+     * 默认读取消息的 query、quote、files 属性；若消息把用户输入整体保存在 input
+     * 等 json 字段中（见 createMessage），子类重写此方法返回对应的 query、quote、files 即可，
+     * 提示内容仍由 getMessageContent 统一拼装。
+     *
+     * @param Message $message
+     * @return array{query: string, quote: string, files: array}
+     */
+    protected function getMessageInput($message)
+    {
+        return [
+            'query' => $message->query,
+            'quote' => $message->quote,
+            'files' => $message->files,
+        ];
+    }
+
+    /**
+     * 构建附件文本内容，子类可重写以调整文件描述格式
+     *
+     * @param array $files
+     * @return array
+     */
+    protected function buildFilesContent($files)
+    {
+        $files = json_encode(array_map(function ($file) {
+            return [
+                'name' => $file['name'],
+                'path' => "{$this->getWorkDir()}/{$file['name']}",
+            ];
+        }, $files), JSON_UNESCAPED_UNICODE);
+
+        return [
+            'type' => 'text',
+            'text' => "<files>{$files}</files>",
+        ];
     }
 
     protected function init($params)
@@ -239,10 +279,6 @@ abstract class Harness extends Agent
                 'status' => self::STATUS_RUNNING,
             ]);
         } else {
-            $query = Arr::get($params, 'query', '');
-            $quote = Arr::get($params, 'quote', '');
-            $files = $this->checkFiles(Arr::get($params, 'files', []));
-
             if (empty($this->conversation)) {
                 $extra = Arr::get($params, 'extra', []);
 
@@ -251,12 +287,7 @@ abstract class Harness extends Agent
                 ]);
             }
 
-            $this->message = $this->createMessage([
-                'query'  => $query,
-                'quote'  => $quote,
-                'files'  => $files,
-                'status' => self::STATUS_RUNNING
-            ]);
+            $this->message = $this->createMessage($params);
         }
 
         $this->prepareTools();
@@ -266,7 +297,17 @@ abstract class Harness extends Agent
 
     abstract protected function createConversation($data);
 
-    abstract protected function createMessage($data);
+    /**
+     * 创建消息（首次运行）
+     *
+     * 用户输入（query、quote、files 等）全部经由 $params 传入，由子类自行解析、过滤并落库，
+     * 消息状态建议置为 STATUS_RUNNING；返回的消息对象需要能被 getMessageInput 还原出
+     * query、quote、files（Harness 据此构建提示内容，见 getMessageContent）。
+     *
+     * @param array $params 运行参数
+     * @return Message 创建好的消息实例
+     */
+    abstract protected function createMessage($params);
 
     protected function start($params)
     {

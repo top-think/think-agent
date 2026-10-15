@@ -121,10 +121,16 @@ class Sandbox
      * - 文件路径字符串（长度小于 PATH_MAX 且不含空字符，且文件真实存在）
      * - 直接传入的文件内容（文本或二进制数据）
      *
-     * @param string $path 沙箱内的目标路径（含文件名），相对路径将基于 workDir 解析
+     * 上传 zip 压缩包时可通过 $extract 让服务端自动解压：
+     * - $extract 为 false，$path 为目标文件路径（含文件名）
+     * - $extract 为 true，$path 为解压目标目录，压缩包解压后不会保留
+     *
+     * @param string $path 沙箱内的目标路径，相对路径将基于 workDir 解析
      * @param mixed $file 文件来源，支持上列形式；字符串内容按文本/二进制原样上传
+     * @param bool $extract 是否自动解压上传的 zip 压缩包（仅支持 zip 格式）
+     * @param array $exclude 解压时排除的文件/目录模式（如 ['__pycache__', '*.pyc']），仅 $extract 为 true 时生效
      */
-    public function uploadFile($path, $file)
+    public function uploadFile($path, $file, bool $extract = false, array $exclude = [])
     {
         $sandboxId = $this->getId();
         $path = $this->resolvePath($path);
@@ -137,10 +143,18 @@ class Sandbox
             $file = fopen($file, 'r');
         }
 
+        $query = ['path' => $path];
+        if ($extract) {
+            $query['extract'] = 'true';
+            if ($exclude) {
+                $query['exclude'] = implode(',', $exclude);
+            }
+        }
+
         try {
             $this->request->post("sandboxes/{$sandboxId}/files/upload", [[
                 'name' => 'file', 'contents' => $file, 'filename' => basename($path),
-            ]], true, ['path' => $path]);
+            ]], true, $query);
         } finally {
             if (is_resource($file)) {
                 fclose($file);
@@ -161,16 +175,25 @@ class Sandbox
     /**
      * 下载文件
      *
-     * @param string $path 文件路径，相对路径将基于 workDir 解析
+     * $path 为目录时服务端会自动打包为 zip 下载，压缩包内路径相对 $path，
+     * 可通过 $exclude 排除不需要打包的文件/目录。
+     *
+     * @param string $path 文件或目录路径，相对路径将基于 workDir 解析
+     * @param array $exclude 目录打包时的排除模式（如 ['__pycache__', '*.pyc']，仅目录生效）
      * @return StreamInterface 文件内容流（二进制安全，可边读边消费）
      */
-    public function downloadFile($path): StreamInterface
+    public function downloadFile($path, array $exclude = []): StreamInterface
     {
         $sandboxId = $this->getId();
         $path = $this->resolvePath($path);
 
+        $query = ['path' => $path];
+        if ($exclude) {
+            $query['exclude'] = implode(',', $exclude);
+        }
+
         return $this->request->rawRequest('GET', "sandboxes/{$sandboxId}/files/download", [
-            'query' => ['path' => $path], 'stream' => true,
+            'query' => $query, 'stream' => true,
         ])->getBody();
     }
 
