@@ -275,7 +275,7 @@ abstract class Harness extends Agent
             }
             $this->chunks = $this->message->chunks;
             $this->round  = count($this->chunks);
-            $this->message->save([
+            $this->saveMessage([
                 'status' => self::STATUS_RUNNING,
             ]);
         } else {
@@ -309,6 +309,19 @@ abstract class Harness extends Agent
      */
     abstract protected function createMessage($params);
 
+    /**
+     * 持久化消息数据，子类可重写以适配字段名或存储方式
+     *
+     * $data 由 Harness 组装，包含 status（运行状态）、chunks（每轮累计的流式片段），
+     * 完成时另有 usage、context、latency。默认直接写入消息模型。
+     *
+     * @param array $data 待保存的字段
+     */
+    protected function saveMessage(array $data): void
+    {
+        $this->message->save($data);
+    }
+
     protected function start($params)
     {
         if ($this->isResume) {
@@ -333,7 +346,7 @@ abstract class Harness extends Agent
     protected function iteration($messages)
     {
         if (!empty($this->chunks)) {
-            $this->message->save([
+            $this->saveMessage([
                 'chunks' => array_values($this->chunks),
             ]);
         }
@@ -351,7 +364,7 @@ abstract class Harness extends Agent
     {
         parent::stop();
 
-        $this->message->save([
+        $this->saveMessage([
             'chunks' => array_values($this->chunks),
             'status' => self::STATUS_CANCELED,
         ]);
@@ -378,7 +391,7 @@ abstract class Harness extends Agent
             }
 
             try {
-                $this->message->save($data);
+                $this->saveMessage($data);
             } catch (Throwable $e) {
                 Log::error($e->getMessage());
             }
