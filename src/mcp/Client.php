@@ -20,7 +20,7 @@ class Client
         if (empty($this->handler)) {
             $this->handler = match ($this->transport) {
                 'sse' => ServerEvent::connect($this->url, $this->headers),
-                'http', 'streamable-http', 'streamable_http' => StreamableHttp::connect($this->url, $this->headers),
+                'http', 'streamable', 'streamable-http', 'streamable_http' => StreamableHttp::connect($this->url, $this->headers),
                 default => throw new Exception("Unsupported transport: {$this->transport}")
             };
         }
