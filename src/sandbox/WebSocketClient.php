@@ -226,7 +226,9 @@ class WebSocketClient extends Client
             }
 
             $message = json_decode($frame->data, true);
-            if (!is_array($message)) throw new RuntimeException('Invalid sandbox WebSocket response');
+            if (!is_array($message)) {
+                throw new RuntimeException("Invalid sandbox WebSocket response: opcode={$frame->opcode}, data={$frame->data}");
+            }
             return $message;
         }
 
