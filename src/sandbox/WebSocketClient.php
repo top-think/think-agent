@@ -14,6 +14,8 @@ class WebSocketClient extends Client
     protected bool $readerStarted = false;
     /** @var array<string, \Swoole\Coroutine\Channel> */
     protected array $requests = [];
+    protected string $messageBuffer = '';
+    protected ?int $messageOpcode = null;
 
     public function __construct(
         protected string $apiUrl,
@@ -125,6 +127,7 @@ class WebSocketClient extends Client
     public function connect(): static
     {
         if ($this->connected) return $this;
+        $this->resetMessageBuffer();
 
         $url = parse_url($this->apiUrl);
         if (!$url || empty($url['host'])) throw new RuntimeException('Invalid sandbox API URL');
@@ -156,6 +159,7 @@ class WebSocketClient extends Client
     public function close(): void
     {
         $this->connected = false;
+        $this->resetMessageBuffer();
         $this->connection?->close();
         $this->connection = null;
 
@@ -220,19 +224,53 @@ class WebSocketClient extends Client
                 continue;
             }
 
-            // 协议消息均为 JSON 文本帧，跳过其它类型帧和空帧，不视为连接断开
-            if ($frame->opcode !== SWOOLE_WEBSOCKET_OPCODE_TEXT || !$frame->data) {
+            if (in_array($frame->opcode, [
+                SWOOLE_WEBSOCKET_OPCODE_TEXT,
+                SWOOLE_WEBSOCKET_OPCODE_BINARY,
+            ], true)) {
+                if ($this->messageOpcode !== null) {
+                    $this->resetMessageBuffer();
+                    throw new RuntimeException('Sandbox WebSocket received a new message before the previous message finished');
+                }
+                $this->messageOpcode = $frame->opcode;
+                $this->messageBuffer = $frame->data;
+            } elseif ($frame->opcode === SWOOLE_WEBSOCKET_OPCODE_CONTINUATION) {
+                if ($this->messageOpcode === null) {
+                    throw new RuntimeException('Sandbox WebSocket received an unexpected continuation frame');
+                }
+                $this->messageBuffer .= $frame->data;
+            } else {
                 continue;
             }
 
-            $message = json_decode($frame->data, true);
+            // Swoole 6.1+ 自动聚合分片并返回 finish=true；旧版本需要按帧累积
+            if (!$frame->finish) {
+                continue;
+            }
+
+            $opcode = $this->messageOpcode;
+            $data   = $this->messageBuffer;
+            $this->resetMessageBuffer();
+
+            // 协议消息均为 JSON 文本帧，跳过其它类型帧和空帧，不视为连接断开
+            if ($opcode !== SWOOLE_WEBSOCKET_OPCODE_TEXT || $data === '') {
+                continue;
+            }
+
+            $message = json_decode($data, true);
             if (!is_array($message)) {
-                throw new RuntimeException("Invalid sandbox WebSocket response: opcode={$frame->opcode}, data={$frame->data}");
+                throw new RuntimeException("Invalid sandbox WebSocket response: opcode={$opcode}, data={$data}");
             }
             return $message;
         }
 
         return null;
+    }
+
+    protected function resetMessageBuffer(): void
+    {
+        $this->messageBuffer = '';
+        $this->messageOpcode = null;
     }
 
     /**
