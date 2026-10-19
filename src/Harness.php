@@ -280,11 +280,7 @@ abstract class Harness extends Agent
             ]);
         } else {
             if (empty($this->conversation)) {
-                $extra = Arr::get($params, 'extra', []);
-
-                $this->conversation = $this->createConversation([
-                    'extra' => $extra ?: null,
-                ]);
+                $this->conversation = $this->createConversation($params);
             }
 
             $this->message = $this->createMessage($params);
