@@ -3,28 +3,28 @@
 namespace think\agent\harness;
 
 use JsonSerializable;
-use think\event\HttpEnd;
-use think\facade\Event;
+use think\swoole\Coroutine;
 
 class DeferredStreamResult implements JsonSerializable
 {
     protected bool $consumed = false;
 
     /**
-     * @param mixed       $result  流式结果（生成器）
-     * @param StreamStore $store   流存储
-     * @param mixed       $payload 响应载荷，支持闭包延迟求值
+     * @param mixed $result 流式结果（生成器）
+     * @param StreamStore $store 流存储
+     * @param mixed $payload 响应载荷，支持闭包延迟求值
      */
     public function __construct(
-        protected $result,
+        protected             $result,
         protected StreamStore $store,
-        protected mixed $payload = null
-    ) {
+        protected mixed       $payload = null
+    )
+    {
     }
 
     public function defer(): static
     {
-        Event::listen(HttpEnd::class, function () {
+        Coroutine::create(function () {
             $this->consume();
         });
 

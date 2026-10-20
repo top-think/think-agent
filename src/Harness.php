@@ -4,6 +4,7 @@ namespace think\agent;
 
 use Exception;
 use Generator;
+use Swoole\Coroutine;
 use think\agent\harness\ContextManager;
 use think\agent\harness\DeferredStreamResult;
 use think\agent\harness\StreamStore;
@@ -12,7 +13,6 @@ use think\agent\model\Message;
 use think\facade\Log;
 use think\helper\Arr;
 use Throwable;
-use function Swoole\Coroutine\go;
 
 abstract class Harness extends Agent
 {
@@ -90,11 +90,11 @@ abstract class Harness extends Agent
     {
         $this->stopWatcherRunning = true;
 
-        go(function () {
+        Coroutine::create(function () {
             $store = $this->getStreamStore();
 
             while ($this->stopWatcherRunning) {
-                if ($store->waitStop(1)) {
+                if ($store->waitStop()) {
                     $this->stop();
                     break;
                 }
@@ -273,7 +273,7 @@ abstract class Harness extends Agent
             if (!($this->message instanceof Message)) {
                 $this->message = $this->conversation->messages()->order('id desc')->findOrFail();
             }
-            $this->chunks = $this->message->chunks;
+            $this->chunks = $this->message->chunks ?? [];
             $this->round  = count($this->chunks);
             $this->saveMessage([
                 'status' => self::STATUS_RUNNING,
