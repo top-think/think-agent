@@ -59,7 +59,7 @@ class StreamStore
             $this->retry();
         }
 
-        $generator = $this->redis->run(function ($redis) use ($sequence, $heartbeatKey) {
+        $generator = $this->redis->stream(function ($redis) use ($sequence, $heartbeatKey) {
             $key = $this->key();
             while (true) {
                 $messages = $redis->xread([$key => $sequence], 50, 30 * 1000);
@@ -95,9 +95,9 @@ class StreamStore
 
     public function pump($result): void
     {
-        Task::run($this->heartbeatKey(), fn() => $this->redis->run(function ($redis) use ($result) {
+        Task::run($this->heartbeatKey(), fn() => $this->redis->dedicated(function ($redis) use ($result) {
             $key = $this->key();
-            $this->redis->del($key);
+            $redis->del($key);
 
             $lastExpireTime = 0;
             while ($result->valid()) {
@@ -138,7 +138,7 @@ class StreamStore
 
     public function waitStop(): bool
     {
-       return $this->redis->run(function ($redis) {
+        return $this->redis->dedicated(function ($redis) {
             if ($redis->exists($this->stopKey())) {
                 return true;
             }
