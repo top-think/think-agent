@@ -227,12 +227,38 @@ foreach ($agent->run(['conversation' => 1, 'query' => '你好']) as $event) {
     // $event: ['session' => ...]、['id' => ...]、['chunks' => ...]、['stats' => ...]、['suspend' => true]
 }
 
-// 恢复挂起的工具（Suspend）：写回用户数据并继续迭代
+// 网络中断后仅继续迭代，不处理 suspend 响应
 foreach ($agent->run([
     'conversation' => 1,
-    'chunk'        => 0,     // 挂起工具所在轮次索引
-    'tool'         => 0,     // 工具在轮次内的索引
-    'payload'      => 'ok',  // 用户提交的数据
+], true) as $event) {
+}
+
+// responses 为空数组时同样表示仅继续迭代
+foreach ($agent->run([
+    'conversation' => 1,
+    'responses'    => [],
+], true) as $event) {
+}
+
+// 恢复挂起的工具（Suspend）：回填用户数据并继续迭代
+foreach ($agent->run([
+    'conversation' => 1,
+    'responses'    => [
+        [
+            'chunk'   => 0,
+            'tool'    => 0,
+            'payload' => 'ok',
+        ],
+    ],
+], true) as $event) {
+}
+
+// 同一轮存在多个挂起工具时，也可以只提交部分结果
+foreach ($agent->run([
+    'conversation' => 1,
+    'responses'    => [
+        ['chunk' => 0, 'tool' => 0, 'payload' => 'ok'],
+    ],
 ], true) as $event) {
 }
 ```
@@ -241,7 +267,9 @@ foreach ($agent->run([
 
 - **主动中断**：调用 `stop()`（或由子类在 `startStopWatcher()` 中监听外部信号后调用），保存 chunks 与 `canceled` 状态
 - **消费端断开**：`run()` 返回的生成器检测到 `yield` 返回 `false` 时自动调用 `stop()`
-- **挂起**：工具返回 `Suspend` 结果时下发 `['suspend' => true]` 事件并结束本轮，等待携带 `chunk/tool/payload` 的恢复运行
+- **挂起**：工具返回 `Suspend` 结果时下发 `['suspend' => true]` 事件并结束本轮，等待用户输入或继续对话
+- **自由回填**：未传 `responses`、传空数组或只提交部分 suspend 时均可继续迭代；未提交项保持 `(Empty)` 供模型判断用户没有输入
+- **结果校验**：实际提交的响应必须指向最新 chunk 中仍为 `(Empty)` 的 suspend；重复、未知或无效的响应会使本次提交整体失败，不会写入部分结果
 - **崩溃恢复**：消息状态仍为运行时，可直接以 `resume` 模式重新拉起，从消息 chunks 重建上下文并继续迭代
 
 ### SubAgent（子智能体基类）

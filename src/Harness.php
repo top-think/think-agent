@@ -321,21 +321,89 @@ abstract class Harness extends Agent
     protected function start($params)
     {
         if ($this->isResume) {
-            if (isset($params['chunk'])) {
-                if ($params['chunk'] !== $this->round - 1) {
-                    throw new Exception('Invalid chunk index for resume');
-                }
-                $tool = $this->chunks[$params['chunk']]['tools'][$params['tool']] ?? [];
-                if (Arr::get($tool, 'content.type') !== 'suspend') {
-                    throw new Exception('Only suspended tool can be resumed');
-                }
-                yield from $this->sendToolData($params['chunk'], $params['tool'], ['response' => $params['payload']]);
-                $this->message->chunks = $this->chunks;
+            $responses = $params['responses'] ?? [];
+
+            if (!is_array($responses)) {
+                throw new Exception('Resume responses must be an array');
+            }
+
+            if (!empty($responses)) {
+                yield from $this->resumeResponses($params);
+                $this->message->chunks = array_values($this->chunks);
             }
         } else {
             yield ['conversation' => $this->conversation->id];
             yield ['id' => $this->message->id];
             $this->trigger('start', $this->conversation, $this->message);
+        }
+    }
+
+    /**
+     * 批量写入当前挂起工具的用户响应。
+     *
+     * 所有已提供的响应必须先完整校验，避免无效请求造成部分更新。
+     *
+     * @param array $params
+     * @return Generator
+     */
+    protected function resumeResponses(array $params)
+    {
+        $responses = $params['responses'] ?? null;
+
+        if (!is_array($responses)) {
+            throw new Exception('Resume responses must be an array');
+        }
+
+        $chunkIndex = $this->round - 1;
+
+        $normalized = [];
+        $seen       = [];
+
+        foreach ($responses as $response) {
+            if (!is_array($response)
+                || !array_key_exists('chunk', $response)
+                || !array_key_exists('tool', $response)
+                || !array_key_exists('payload', $response)) {
+                throw new Exception('Invalid resume response');
+            }
+
+            $responseChunk = filter_var($response['chunk'], FILTER_VALIDATE_INT);
+            $responseTool  = filter_var($response['tool'], FILTER_VALIDATE_INT);
+
+            if ($responseChunk === false || $responseChunk !== $chunkIndex) {
+                throw new Exception('Invalid chunk index for resume');
+            }
+
+            if ($responseTool === false || $responseTool < 0) {
+                throw new Exception('Invalid tool index for resume');
+            }
+
+            $key = "{$responseChunk}:{$responseTool}";
+            if (isset($seen[$key])) {
+                throw new Exception('Duplicate resume response');
+            }
+            $seen[$key] = true;
+
+            $tool = $this->chunks[$responseChunk]['tools'][$responseTool] ?? null;
+            if (Arr::get($tool, 'content.type') !== 'suspend') {
+                throw new Exception('Only suspended tool can be resumed');
+            }
+
+            if (($tool['response'] ?? null) !== '(Empty)') {
+                throw new Exception('Resume response does not match a pending suspend');
+            }
+
+            $normalized[] = [
+                'chunk'   => $responseChunk,
+                'tool'    => $responseTool,
+                'payload' => $response['payload'],
+            ];
+        }
+
+        foreach ($normalized as $response) {
+            yield from $this->sendToolData($response['chunk'], $response['tool'], [
+                'response' => $response['payload'],
+            ]);
         }
     }
 
