@@ -16,7 +16,8 @@ class HttpClient extends Client
 
     public function listFiles(?string $path = null): array
     {
-        $response = $this->request->get("sandboxes/{$this->sandboxId}/files");
+        $query = $path === null || $path === '' ? [] : compact('path');
+        $response = $this->request->get("sandboxes/{$this->sandboxId}/files", $query);
         return $response['data'] ?? [];
     }
 
