@@ -306,7 +306,7 @@ $this->addFunction('agent_run', new AgentRun(
 
         return new AnalystAgent($identifier, [
             'prompt'  => $config['prompt'],
-            'workDir' => $this->getWorkDir(),
+            'workDir' => $config['workDir'] ?? '/workspace',
         ]);
     },
     $this,

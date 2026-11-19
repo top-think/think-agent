@@ -140,9 +140,12 @@ abstract class Harness extends Agent
     abstract protected function getHistoryMessages($round);
 
     /**
-     * 工作目录，文件类内容的相对路径基准
+     * 解析附件路径，子类可重写以调整路径映射规则
      */
-    abstract protected function getWorkDir();
+    protected function resolveAttachmentPath(string $path): string
+    {
+        return $path;
+    }
 
     protected function buildPromptMessages()
     {
@@ -247,7 +250,7 @@ abstract class Harness extends Agent
         $files = json_encode(array_map(function ($file) {
             return [
                 'name' => $file['name'],
-                'path' => "{$this->getWorkDir()}/{$file['name']}",
+                'path' => $this->resolveAttachmentPath($file['name']),
             ];
         }, $files), JSON_UNESCAPED_UNICODE);
 
