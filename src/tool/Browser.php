@@ -13,7 +13,7 @@ class Browser extends FunctionCall
             'type'        => 'string',
             'description' => 'The browser action to perform.',
             'required'    => true,
-            'enum'        => ['open', 'goto', 'click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'hover', 'check', 'uncheck', 'select', 'drag', 'snapshot', 'screenshot', 'eval', 'resize', 'tab-new', 'tab-close', 'tab-select', 'dialog-accept', 'dialog-dismiss', 'go-back', 'go-forward', 'reload', 'mousemove', 'mousedown', 'mouseup', 'mousewheel'],
+            'enum'        => ['open', 'goto', 'click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'hover', 'check', 'uncheck', 'select', 'drag', 'snapshot', 'screenshot', 'eval', 'resize', 'tab-list', 'tab-new', 'tab-close', 'tab-select', 'dialog-accept', 'dialog-dismiss', 'go-back', 'go-forward', 'reload', 'mousemove', 'mousedown', 'mouseup', 'mousewheel'],
         ],
         'params' => [
             'type'        => 'string',
